@@ -1,0 +1,85 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <record id="maintenance_equipment_view_form_inherit_serein" model="ir.ui.view">
+        <field name="name">maintenance.equipment.form.inherit.serein</field>
+        <field name="model">maintenance.equipment</field>
+        <field name="inherit_id" ref="maintenance.hr_equipment_view_form"/>
+        <field name="arch" type="xml">
+            <xpath expr="//notebook/page[@name='description']" position="before">
+                <page string="Aircraft" name="serein_aircraft">
+                    <group>
+                        <group>
+                            <field name="is_aircraft"/>
+                            <field name="aircraft_type" invisible="not is_aircraft" required="is_aircraft"/>
+                            <field name="tail_number" invisible="not is_aircraft" required="is_aircraft"/>
+                            <field name="home_base_id" invisible="not is_aircraft"/>
+                            <field name="rack_capacity" invisible="not is_aircraft"/>
+                        </group>
+                        <group invisible="not is_aircraft">
+                            <field name="service_interval_hours"/>
+                            <field name="hours_since_service"/>
+                            <field name="is_airworthy"/>
+                            <field name="aircraft_currency_id" invisible="1"/>
+                            <field name="aircraft_hourly_cost"/>
+                        </group>
+                    </group>
+                </page>
+            </xpath>
+        </field>
+    </record>
+
+    <record id="maintenance_equipment_view_list_aircraft" model="ir.ui.view">
+        <field name="name">maintenance.equipment.list.aircraft</field>
+        <field name="model">maintenance.equipment</field>
+        <field name="priority">50</field>
+        <field name="arch" type="xml">
+            <list>
+                <field name="name"/>
+                <field name="tail_number"/>
+                <field name="aircraft_type"/>
+                <field name="home_base_id"/>
+                <field name="rack_capacity"/>
+                <field name="hours_since_service"/>
+                <field name="service_interval_hours"/>
+                <field name="is_airworthy"/>
+            </list>
+        </field>
+    </record>
+
+    <record id="maintenance_equipment_view_search_aircraft" model="ir.ui.view">
+        <field name="name">maintenance.equipment.search.aircraft</field>
+        <field name="model">maintenance.equipment</field>
+        <field name="priority">50</field>
+        <field name="arch" type="xml">
+            <search>
+                <field name="name"/>
+                <field name="tail_number"/>
+                <field name="home_base_id"/>
+                <filter name="crewed" string="Crewed" domain="[('aircraft_type', '=', 'crewed')]"/>
+                <filter name="drone" string="Drones" domain="[('aircraft_type', '=', 'drone')]"/>
+                <group>
+                    <filter name="group_base" string="Home Base" context="{'group_by': 'home_base_id'}"/>
+                    <filter name="group_type" string="Type" context="{'group_by': 'aircraft_type'}"/>
+                </group>
+            </search>
+        </field>
+    </record>
+
+    <record id="maintenance_equipment_action_aircraft" model="ir.actions.act_window">
+        <field name="name">Aircraft</field>
+        <field name="res_model">maintenance.equipment</field>
+        <field name="view_mode">list,form</field>
+        <field name="domain">[('is_aircraft', '=', True)]</field>
+        <field name="context">{'default_is_aircraft': True}</field>
+        <field name="search_view_id" ref="maintenance_equipment_view_search_aircraft"/>
+        <field name="view_ids" eval="[
+            (5, 0, 0),
+            (0, 0, {'view_mode': 'list', 'view_id': ref('maintenance_equipment_view_list_aircraft')}),
+            (0, 0, {'view_mode': 'form', 'view_id': ref('maintenance.hr_equipment_view_form')}),
+        ]"/>
+        <field name="help" type="html">
+            <p class="o_view_nocontent_smiling_face">Add the first aircraft</p>
+            <p>Crewed aircraft and drones are maintenance equipment with an Aircraft tab.</p>
+        </field>
+    </record>
+</odoo>

@@ -1,0 +1,63 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <record id="hr_employee_view_form_inherit_serein" model="ir.ui.view">
+        <field name="name">hr.employee.form.inherit.serein</field>
+        <field name="model">hr.employee</field>
+        <field name="inherit_id" ref="hr.view_employee_form"/>
+        <field name="arch" type="xml">
+            <xpath expr="//notebook/page[@name='work_information']" position="after">
+                <page string="Flying" name="serein_pilot">
+                    <group>
+                        <group>
+                            <field name="is_pilot"/>
+                            <field name="pilot_role" invisible="not is_pilot" required="is_pilot"/>
+                            <field name="pilot_licence_number" invisible="not is_pilot" required="is_pilot"/>
+                            <field name="licence_expiry" invisible="not is_pilot" required="is_pilot"/>
+                            <field name="medical_expiry" invisible="not is_pilot or pilot_role == 'drone_operator'"/>
+                        </group>
+                        <group invisible="not is_pilot">
+                            <field name="duty_hours_7d"/>
+                            <field name="weekly_duty_limit"/>
+                            <field name="pilot_currency_id" invisible="1"/>
+                            <field name="pilot_hourly_cost"/>
+                        </group>
+                    </group>
+                </page>
+            </xpath>
+        </field>
+    </record>
+
+    <record id="hr_employee_view_list_pilot" model="ir.ui.view">
+        <field name="name">hr.employee.list.pilot</field>
+        <field name="model">hr.employee</field>
+        <field name="priority">50</field>
+        <field name="arch" type="xml">
+            <list>
+                <field name="name"/>
+                <field name="pilot_role"/>
+                <field name="pilot_licence_number"/>
+                <field name="licence_expiry"/>
+                <field name="medical_expiry"/>
+                <field name="duty_hours_7d"/>
+                <field name="weekly_duty_limit"/>
+            </list>
+        </field>
+    </record>
+
+    <record id="hr_employee_action_pilot" model="ir.actions.act_window">
+        <field name="name">Pilots and Operators</field>
+        <field name="res_model">hr.employee</field>
+        <field name="view_mode">list,form</field>
+        <field name="domain">[('is_pilot', '=', True)]</field>
+        <field name="context">{'default_is_pilot': True, 'default_pilot_role': 'pilot'}</field>
+        <field name="view_ids" eval="[
+            (5, 0, 0),
+            (0, 0, {'view_mode': 'list', 'view_id': ref('hr_employee_view_list_pilot')}),
+            (0, 0, {'view_mode': 'form', 'view_id': ref('hr.view_employee_form')}),
+        ]"/>
+        <field name="help" type="html">
+            <p class="o_view_nocontent_smiling_face">Add the first pilot or drone operator</p>
+            <p>Pilots are employees with the Flying tab filled in.</p>
+        </field>
+    </record>
+</odoo>

@@ -1,0 +1,27 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <menuitem id="menu_serein_root"
+              name="Serein"
+              web_icon="serein_ops,static/description/icon.png"
+              groups="group_serein_operator"
+              sequence="5"/>
+
+    <menuitem id="menu_serein_clients" name="Clients" parent="menu_serein_root" sequence="20"/>
+    <menuitem id="menu_serein_contracts" name="Contracts" parent="menu_serein_clients"
+              action="seeding_contract_action" sequence="10"/>
+    <menuitem id="menu_serein_target_areas" name="Target Areas" parent="menu_serein_clients"
+              action="seeding_target_area_action" sequence="20"/>
+
+    <menuitem id="menu_serein_fleet" name="Fleet" parent="menu_serein_root" sequence="30"/>
+    <menuitem id="menu_serein_aircraft" name="Aircraft" parent="menu_serein_fleet"
+              action="maintenance_equipment_action_aircraft" sequence="10"/>
+    <menuitem id="menu_serein_pilots" name="Pilots and Operators" parent="menu_serein_fleet"
+              action="hr_employee_action_pilot" groups="hr.group_hr_user" sequence="20"/>
+    <menuitem id="menu_serein_flares" name="Flares" parent="menu_serein_fleet"
+              action="product_template_action_flare" sequence="30"/>
+
+    <menuitem id="menu_serein_config" name="Configuration" parent="menu_serein_root"
+              groups="group_serein_manager" sequence="90"/>
+    <menuitem id="menu_serein_bases" name="Bases" parent="menu_serein_config"
+              action="seeding_base_action" sequence="10"/>
+</odoo>

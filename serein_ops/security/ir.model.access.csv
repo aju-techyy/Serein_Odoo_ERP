@@ -1,0 +1,7 @@
+id,name,model_id:id,group_id:id,perm_read,perm_write,perm_create,perm_unlink
+access_seeding_base_operator,seeding.base operator,model_seeding_base,group_serein_operator,1,0,0,0
+access_seeding_base_manager,seeding.base manager,model_seeding_base,group_serein_manager,1,1,1,1
+access_seeding_target_area_operator,seeding.target.area operator,model_seeding_target_area,group_serein_operator,1,0,0,0
+access_seeding_target_area_manager,seeding.target.area manager,model_seeding_target_area,group_serein_manager,1,1,1,1
+access_seeding_contract_operator,seeding.contract operator,model_seeding_contract,group_serein_operator,1,0,0,0
+access_seeding_contract_manager,seeding.contract manager,model_seeding_contract,group_serein_manager,1,1,1,1

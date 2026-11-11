@@ -1,0 +1,104 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <record id="seeding_contract_view_list" model="ir.ui.view">
+        <field name="name">seeding.contract.list</field>
+        <field name="model">seeding.contract</field>
+        <field name="arch" type="xml">
+            <list decoration-muted="state in ('closed', 'cancelled')">
+                <field name="name"/>
+                <field name="partner_id"/>
+                <field name="season_start"/>
+                <field name="season_end"/>
+                <field name="flight_hour_budget"/>
+                <field name="hours_used"/>
+                <field name="currency_id" column_invisible="1"/>
+                <field name="flight_hour_rate"/>
+                <field name="state" widget="badge"
+                       decoration-info="state == 'draft'"
+                       decoration-success="state == 'active'"/>
+            </list>
+        </field>
+    </record>
+
+    <record id="seeding_contract_view_form" model="ir.ui.view">
+        <field name="name">seeding.contract.form</field>
+        <field name="model">seeding.contract</field>
+        <field name="arch" type="xml">
+            <form>
+                <header>
+                    <button name="action_activate" string="Activate" type="object"
+                            class="oe_highlight" invisible="state != 'draft'"/>
+                    <button name="action_close" string="Close" type="object"
+                            invisible="state != 'active'"/>
+                    <button name="action_cancel" string="Cancel" type="object"
+                            invisible="state not in ('draft', 'active')"/>
+                    <button name="action_draft" string="Reset to Draft" type="object"
+                            invisible="state != 'cancelled'"/>
+                    <field name="state" widget="statusbar" statusbar_visible="draft,active,closed"/>
+                </header>
+                <sheet>
+                    <div class="oe_title">
+                        <h1><field name="name"/></h1>
+                    </div>
+                    <group>
+                        <group string="Client">
+                            <field name="partner_id" readonly="state != 'draft'" context="{'default_is_company': True}"/>
+                            <field name="area_ids" widget="many2many_tags"
+                                   readonly="state in ('closed', 'cancelled')"
+                                   context="{'default_partner_id': partner_id}"/>
+                            <field name="company_id" groups="base.group_multi_company"/>
+                        </group>
+                        <group string="Season">
+                            <field name="season_start" readonly="state in ('closed', 'cancelled')"/>
+                            <field name="season_end" readonly="state in ('closed', 'cancelled')"/>
+                        </group>
+                        <group string="Flight Hours">
+                            <field name="flight_hour_budget" readonly="state in ('closed', 'cancelled')"/>
+                            <field name="hours_used"/>
+                            <field name="hours_remaining"/>
+                        </group>
+                        <group string="Rates">
+                            <field name="currency_id" invisible="1"/>
+                            <field name="standby_fee" readonly="state in ('closed', 'cancelled')"/>
+                            <field name="flight_hour_rate" readonly="state in ('closed', 'cancelled')"/>
+                        </group>
+                    </group>
+                    <notebook>
+                        <page string="Notes" name="notes">
+                            <field name="note"/>
+                        </page>
+                    </notebook>
+                </sheet>
+                <chatter/>
+            </form>
+        </field>
+    </record>
+
+    <record id="seeding_contract_view_search" model="ir.ui.view">
+        <field name="name">seeding.contract.search</field>
+        <field name="model">seeding.contract</field>
+        <field name="arch" type="xml">
+            <search>
+                <field name="name"/>
+                <field name="partner_id"/>
+                <field name="area_ids"/>
+                <filter name="active_contracts" string="Active" domain="[('state', '=', 'active')]"/>
+                <filter name="draft" string="Draft" domain="[('state', '=', 'draft')]"/>
+                <group>
+                    <filter name="group_partner" string="Client" context="{'group_by': 'partner_id'}"/>
+                    <filter name="group_state" string="Status" context="{'group_by': 'state'}"/>
+                </group>
+            </search>
+        </field>
+    </record>
+
+    <record id="seeding_contract_action" model="ir.actions.act_window">
+        <field name="name">Contracts</field>
+        <field name="res_model">seeding.contract</field>
+        <field name="view_mode">list,form</field>
+        <field name="help" type="html">
+            <p class="o_view_nocontent_smiling_face">Add the first client contract</p>
+            <p>A contract sets the season, target areas, flight-hour budget, and rates for a client.</p>
+        </field>
+    </record>
+</odoo>

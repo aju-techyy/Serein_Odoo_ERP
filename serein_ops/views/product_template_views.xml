@@ -1,0 +1,52 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <record id="product_template_view_form_inherit_serein" model="ir.ui.view">
+        <field name="name">product.template.form.inherit.serein</field>
+        <field name="model">product.template</field>
+        <field name="inherit_id" ref="product.product_template_form_view"/>
+        <field name="arch" type="xml">
+            <xpath expr="//notebook/page[@name='general_information']" position="after">
+                <page string="Cloud Seeding" name="serein_flare">
+                    <group>
+                        <group>
+                            <field name="is_seeding_flare"/>
+                            <field name="grams_per_flare" invisible="not is_seeding_flare"/>
+                        </group>
+                    </group>
+                </page>
+            </xpath>
+        </field>
+    </record>
+
+    <record id="product_template_view_list_flare" model="ir.ui.view">
+        <field name="name">product.template.list.flare</field>
+        <field name="model">product.template</field>
+        <field name="priority">50</field>
+        <field name="arch" type="xml">
+            <list>
+                <field name="name"/>
+                <field name="default_code"/>
+                <field name="grams_per_flare"/>
+                <field name="qty_available"/>
+                <field name="uom_id" groups="uom.group_uom"/>
+            </list>
+        </field>
+    </record>
+
+    <record id="product_template_action_flare" model="ir.actions.act_window">
+        <field name="name">Flares</field>
+        <field name="res_model">product.template</field>
+        <field name="view_mode">list,form</field>
+        <field name="domain">[('is_seeding_flare', '=', True)]</field>
+        <field name="context">{'default_is_seeding_flare': True, 'default_type': 'consu', 'default_is_storable': True}</field>
+        <field name="view_ids" eval="[
+            (5, 0, 0),
+            (0, 0, {'view_mode': 'list', 'view_id': ref('product_template_view_list_flare')}),
+            (0, 0, {'view_mode': 'form', 'view_id': ref('product.product_template_form_view')}),
+        ]"/>
+        <field name="help" type="html">
+            <p class="o_view_nocontent_smiling_face">Add the first seeding flare</p>
+            <p>Flares are stocked products with the Cloud Seeding tab filled in.</p>
+        </field>
+    </record>
+</odoo>
