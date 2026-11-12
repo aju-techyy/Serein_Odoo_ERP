@@ -16,8 +16,9 @@ class SeedingBase(models.Model):
         domain="[('usage', '=', 'internal')]",
         check_company=True,
         help="Where this base keeps its flares. Left empty, a location is "
-             "created automatically under the company's main warehouse.",
+             "created automatically inside the stock of the company's main warehouse.",
     )
+    orderpoint_count = fields.Integer(string='Reorder Rules', compute='_compute_orderpoint_count')
     aircraft_ids = fields.One2many(
         'maintenance.equipment', 'home_base_id', string='Aircraft',
     )
@@ -34,6 +35,13 @@ class SeedingBase(models.Model):
         for base in self:
             base.aircraft_count = len(base.aircraft_ids)
 
+    def _compute_orderpoint_count(self):
+        Orderpoint = self.env['stock.warehouse.orderpoint'].sudo()
+        for base in self:
+            base.orderpoint_count = Orderpoint.search_count(
+                [('location_id', '=', base.location_id.id)],
+            ) if base.location_id else 0
+
     @api.model_create_multi
     def create(self, vals_list):
         bases = super().create(vals_list)
@@ -41,17 +49,46 @@ class SeedingBase(models.Model):
             base.location_id = base._create_stock_location()
         return bases
 
-    def _create_stock_location(self):
-        """Create an internal stock location for this base under the
-        company's first warehouse (or at the top level if there is none).
-        Done as superuser: a Serein manager need not be an inventory manager."""
+    def _company_warehouse(self):
         self.ensure_one()
-        warehouse = self.env['stock.warehouse'].sudo().search(
+        return self.env['stock.warehouse'].sudo().search(
             [('company_id', '=', self.company_id.id)], limit=1,
         )
+
+    def _create_stock_location(self):
+        """Create an internal stock location for this base inside the stock
+        location of the company's first warehouse (or at the top level if
+        there is none). Inside the warehouse stock, a reorder rule at the base
+        finds the Buy route and receipts go straight to the base.
+        Done as superuser: a Serein manager need not be an inventory manager."""
+        self.ensure_one()
+        warehouse = self._company_warehouse()
         return self.env['stock.location'].sudo().create({
             'name': self.name,
             'usage': 'internal',
-            'location_id': warehouse.view_location_id.id or False,
+            'location_id': warehouse.lot_stock_id.id or False,
             'company_id': self.company_id.id,
         })
+
+    def _place_location_under_stock(self):
+        """Bases created before flare purchasing had their location directly
+        under the warehouse. Move such a location into the warehouse stock."""
+        for base in self:
+            location = base.location_id.sudo()
+            warehouse = base._company_warehouse()
+            if location and warehouse and location.location_id == warehouse.view_location_id:
+                location.location_id = warehouse.lot_stock_id
+
+    def action_view_orderpoints(self):
+        """Reorder rules for flares at this base."""
+        self.ensure_one()
+        action = self.env['ir.actions.act_window']._for_xml_id('stock.action_orderpoint')
+        flare = self.env['product.product'].search([('is_seeding_flare', '=', True)], limit=1)
+        action['domain'] = [('location_id', '=', self.location_id.id)]
+        action['context'] = {
+            'default_location_id': self.location_id.id,
+            'default_warehouse_id': self.location_id.warehouse_id.id,
+            'default_product_id': flare.id,
+            'default_trigger': 'auto',
+        }
+        return action

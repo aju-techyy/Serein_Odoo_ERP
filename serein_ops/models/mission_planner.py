@@ -173,6 +173,7 @@ class SeedingMissionPlanner(models.AbstractModel):
                 'service_interval_h': plane.service_interval_hours,
                 'hours_since_service': plane.hours_since_service,
                 'open_corrective_requests': plane._open_corrective_requests().mapped('name'),
+                'open_service_requests': plane._open_service_requests().mapped('name'),
                 'airworthy': plane.is_airworthy,
                 'flying_mission': launched.filtered(lambda m: m.aircraft_id == plane)[:1].name or None,
                 'hourly_cost': plane.aircraft_hourly_cost,

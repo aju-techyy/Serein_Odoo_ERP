@@ -97,6 +97,7 @@ Rules:
   flight: the client, target area, date, aircraft, crew, takeoff and landing, flight time.
   conditions: the cloud conditions that led to the flight, from conditions_at_alert.
   results: the number of flares fired, the seeding material released, and rainfall.
+  You may name the flare batches (flares.batches) the flares came from.
 - If observed_rainfall_mm is null, say that observed rainfall has not been recorded yet.
   Never claim or imply that the seeding caused or increased rainfall.
 - Do not mention internal ids, costs, prices or how the text was written.
@@ -302,6 +303,7 @@ class SeedingMissionWriter(models.AbstractModel):
                 'grams_per_flare': mission.flare_product_id.grams_per_flare,
                 'material_released_g': mission.material_released_g,
                 'material_released_kg': round(mission.material_released_g / 1000.0, 2),
+                'batches': mission._flare_batch_lines(),
             },
             'conditions_at_alert': self._conditions(mission.alert_id),
             'readiness_before_launch': self._readiness(mission),

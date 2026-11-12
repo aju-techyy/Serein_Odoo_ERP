@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <!-- Lots and storage locations on, the release location and operation
+         type in place, and base locations inside the warehouse stock.
+         Runs on every install and update; it changes nothing the second time. -->
+    <function model="res.company" name="_seeding_setup_flare_stock"/>
+</odoo>

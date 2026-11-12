@@ -1,5 +1,6 @@
-from odoo import _, api, fields, models
+from odoo import Command, _, api, fields, models
 from odoo.exceptions import UserError
+from odoo.tools import float_compare
 
 # Checks a different aircraft, pilot, or flare load can fix (5 to 11).
 # Checks 1 to 4 depend on the contract and the alert.
@@ -128,6 +129,14 @@ class SeedingMission(models.Model):
     material_released_g = fields.Float(
         string='Material Released (g)', compute='_compute_material_released', store=True,
         digits=(12, 1), help="Flares fired x grams of seeding material per flare.",
+    )
+    picking_id = fields.Many2one(
+        'stock.picking', string='Flare Transfer', readonly=True, copy=False,
+        help="The validated transfer that moved the flares fired out of the base, by batch.",
+    )
+    flare_batches = fields.Char(
+        string='Flare Batches', compute='_compute_flare_batches',
+        help="Batches of the flares fired, with the number taken from each.",
     )
     observed_rainfall_mm = fields.Float(
         string='Observed Rainfall (mm)', readonly=True, copy=False, digits=(8, 1),
@@ -269,6 +278,30 @@ class SeedingMission(models.Model):
     def _compute_material_released(self):
         for mission in self:
             mission.material_released_g = mission.flares_fired * mission.flare_product_id.grams_per_flare
+
+    @api.depends('picking_id.move_line_ids.lot_id', 'picking_id.move_line_ids.quantity')
+    def _compute_flare_batches(self):
+        for mission in self:
+            lines = mission._flare_batch_lines()
+            mission.flare_batches = ', '.join(
+                '%s x %s' % (line['batch'], line['flares']) for line in lines
+            ) or False
+
+    def _flare_batch_lines(self):
+        """Batches of the flares fired, as [{'batch', 'flares'}], from the
+        validated release transfer. Read as superuser: operators and the
+        report need them without stock rights."""
+        self.ensure_one()
+        picking = self.sudo().picking_id
+        if not picking or picking.state != 'done':
+            return []
+        flares = {}
+        for line in picking.move_line_ids.filtered(lambda l: l.lot_id and l.product_id == self.sudo().flare_product_id):
+            flares[line.lot_id.name] = flares.get(line.lot_id.name, 0) + line.quantity
+        return [
+            {'batch': name, 'flares': int(qty) if qty == int(qty) else qty}
+            for name, qty in sorted(flares.items())
+        ]
 
     @api.depends('client_summary', 'summary_reviewed_by')
     def _compute_summary_state(self):
@@ -462,8 +495,83 @@ class SeedingMission(models.Model):
             if landing <= mission.takeoff_at:
                 raise UserError(_("Landing must be after takeoff on %s.", mission.name))
             mission.write({'state': 'completed', 'landing_at': landing})
+            mission._release_fired_flares()
+            mission.aircraft_id._check_service_due()
             self.env['seeding.mission.writer'].write_summary(mission)
         return True
+
+    def _release_fired_flares(self):
+        """Create and validate the transfer of the flares fired, out of the
+        base's stock location into "Released to Atmosphere". Batches are
+        taken first in, first out. Refuses (and so blocks completion) if the
+        base cannot supply them. Done as superuser: operators complete
+        missions without inventory rights."""
+        self.ensure_one()
+        if self.flares_fired <= 0 or self.picking_id:
+            return self.picking_id
+        mission = self.sudo()
+        product = mission.flare_product_id
+        location = mission.base_id.location_id
+        if not product:
+            raise UserError(_("%s has no flare product, so the flares fired cannot leave stock.", self.name))
+        if not location:
+            raise UserError(_("%s has no base stock location, so the flares fired cannot leave stock.", self.name))
+        warehouse = location.warehouse_id
+        if not warehouse:
+            raise UserError(_(
+                "The stock location of base %s is not inside a warehouse, so the flares fired "
+                "cannot leave stock.", mission.base_id.name,
+            ))
+        company = mission.company_id
+        destination = company._seeding_release_location()
+        picking = self.env['stock.picking'].sudo().create({
+            'picking_type_id': company._seeding_release_picking_type(warehouse).id,
+            'location_id': location.id,
+            'location_dest_id': destination.id,
+            'origin': self.name,
+            'seeding_mission_id': self.id,
+            'company_id': company.id,
+            'scheduled_date': mission.landing_at or fields.Datetime.now(),
+            'move_ids': [Command.create({
+                'product_id': product.id,
+                'product_uom_qty': self.flares_fired,
+                'product_uom': product.uom_id.id,
+                'location_id': location.id,
+                'location_dest_id': destination.id,
+                'company_id': company.id,
+            })],
+        })
+        picking.action_confirm()
+        picking.action_assign()
+        move = picking.move_ids
+        usable = move.move_line_ids
+        if product.tracking != 'none':
+            usable = usable.filtered('lot_id')
+        available = sum(usable.mapped('quantity'))
+        short = float_compare(available, self.flares_fired, precision_rounding=move.product_uom.rounding) < 0
+        if short or usable != move.move_line_ids:
+            on_hand = product.with_context(location=location.id).qty_available
+            raise UserError(_(
+                "%(mission)s fired %(fired)s %(flare)s, but %(base)s can supply %(available)s from "
+                "batches on hand (%(on_hand)s on hand). Correct the base stock, then complete the "
+                "mission again.",
+                mission=self.name, fired=self.flares_fired, flare=product.display_name,
+                base=mission.base_id.name, available=int(available),
+                on_hand=int(on_hand) if on_hand == int(on_hand) else on_hand,
+            ))
+        move.picked = True
+        picking.with_context(skip_backorder=True, cancel_backorder=True).button_validate()
+        if picking.state != 'done':
+            raise UserError(_("The flare transfer %s could not be validated.", picking.name))
+        self.picking_id = picking
+        message = _(
+            "%(fired)s flares left %(base)s by transfer %(picking)s.",
+            fired=self.flares_fired, base=mission.base_id.name, picking=picking.name,
+        )
+        if self.flare_batches:
+            message = '%s %s' % (message, _("Batches: %s.", self.flare_batches))
+        self.message_post(body=message)
+        return picking
 
     def action_cancel(self):
         if any(m.state not in ('proposed', 'ready') for m in self):
@@ -570,6 +678,16 @@ class SeedingMission(models.Model):
             if not mission.summary_reviewed_by:
                 raise UserError(_("Approve the client summary of %s before printing the report.", mission.name))
         return self.env.ref('serein_ops.action_report_seeding_mission').report_action(self)
+
+    def action_view_flare_transfer(self):
+        self.ensure_one()
+        return {
+            'type': 'ir.actions.act_window',
+            'res_model': 'stock.picking',
+            'res_id': self.picking_id.id,
+            'view_mode': 'form',
+            'name': _("Flare Transfer"),
+        }
 
     def action_view_ai_logs(self):
         self.ensure_one()

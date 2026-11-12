@@ -179,6 +179,12 @@ class SeedingMission(models.Model):
                 "it has an open corrective maintenance request (%s)",
                 ', '.join(open_requests.mapped('name')),
             ))
+        service_requests = aircraft._open_service_requests()
+        if service_requests:
+            problems.append(_(
+                "its scheduled service is due (%s is open)",
+                ', '.join(service_requests.mapped('name')),
+            ))
         if aircraft.hours_since_service >= aircraft.service_interval_hours:
             problems.append(_(
                 "it has flown %(flown)s h since its last service, and the interval is %(interval)s h",
@@ -191,8 +197,8 @@ class SeedingMission(models.Model):
                 aircraft=aircraft.display_name, problems='; '.join(problems),
             )
         return PASS, _(
-            "%(aircraft)s has no open corrective request and has flown %(flown)s of %(interval)s h "
-            "since its last service.",
+            "%(aircraft)s has no open corrective or service request and has flown %(flown)s of "
+            "%(interval)s h since its last service.",
             aircraft=aircraft.display_name, flown=_hours(aircraft.hours_since_service),
             interval=_hours(aircraft.service_interval_hours),
         )

@@ -5,6 +5,12 @@
         <field name="model">maintenance.equipment</field>
         <field name="inherit_id" ref="maintenance.hr_equipment_view_form"/>
         <field name="arch" type="xml">
+            <xpath expr="//div[@name='button_box']" position="inside">
+                <button name="action_view_seeding_missions" type="object" class="oe_stat_button"
+                        icon="fa-plane" invisible="not is_aircraft">
+                    <field name="seeding_mission_count" widget="statinfo" string="Missions"/>
+                </button>
+            </xpath>
             <xpath expr="//notebook/page[@name='description']" position="before">
                 <page string="Aircraft" name="serein_aircraft">
                     <group>
@@ -18,12 +24,38 @@
                         <group invisible="not is_aircraft">
                             <field name="service_interval_hours"/>
                             <field name="hours_since_service"/>
+                            <field name="last_service_at"/>
                             <field name="is_airworthy"/>
                             <field name="aircraft_currency_id" invisible="1"/>
                             <field name="aircraft_hourly_cost"/>
                         </group>
                     </group>
                 </page>
+            </xpath>
+        </field>
+    </record>
+
+    <record id="maintenance_request_view_form_inherit_serein" model="ir.ui.view">
+        <field name="name">maintenance.request.form.inherit.serein</field>
+        <field name="model">maintenance.request</field>
+        <field name="inherit_id" ref="maintenance.hr_equipment_request_view_form"/>
+        <field name="arch" type="xml">
+            <xpath expr="//field[@name='maintenance_type']" position="after">
+                <field name="equipment_is_aircraft" invisible="1"/>
+                <field name="is_scheduled_service" invisible="not equipment_is_aircraft"/>
+                <field name="service_completed_at" invisible="not service_completed_at"/>
+            </xpath>
+        </field>
+    </record>
+
+    <record id="maintenance_request_view_search_inherit_serein" model="ir.ui.view">
+        <field name="name">maintenance.request.search.inherit.serein</field>
+        <field name="model">maintenance.request</field>
+        <field name="inherit_id" ref="maintenance.hr_equipment_request_view_search"/>
+        <field name="arch" type="xml">
+            <xpath expr="//filter[1]" position="before">
+                <filter name="scheduled_service" string="Scheduled Services"
+                        domain="[('is_scheduled_service', '=', True)]"/>
             </xpath>
         </field>
     </record>
@@ -41,6 +73,7 @@
                 <field name="rack_capacity"/>
                 <field name="hours_since_service"/>
                 <field name="service_interval_hours"/>
+                <field name="last_service_at" optional="hide"/>
                 <field name="is_airworthy"/>
             </list>
         </field>

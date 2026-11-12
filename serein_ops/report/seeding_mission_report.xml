@@ -92,6 +92,25 @@
                         </tr>
                     </tbody>
                 </table>
+                <t t-set="batches" t-value="o._flare_batch_lines()"/>
+                <table t-if="batches" class="table table-sm" name="flare_batches">
+                    <thead>
+                        <tr>
+                            <th>Batch</th>
+                            <th class="text-end">Flares Fired</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr t-foreach="batches" t-as="batch">
+                            <td t-out="batch['batch']"/>
+                            <td class="text-end" t-out="batch['flares']"/>
+                        </tr>
+                    </tbody>
+                </table>
+                <p t-if="batches" class="small text-muted">
+                    Released from <t t-out="o.base_id.name"/> by stock transfer
+                    <t t-out="o.sudo().picking_id.name"/>.
+                </p>
 
                 <h4 class="mt-4">Weather Behind the Mission</h4>
                 <t t-if="o.alert_id">

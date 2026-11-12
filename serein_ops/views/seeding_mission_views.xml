@@ -103,6 +103,13 @@
                                 icon="fa-commenting-o" invisible="not ai_log_count">
                             <field name="ai_log_count" widget="statinfo" string="AI Calls"/>
                         </button>
+                        <button name="action_view_flare_transfer" type="object" class="oe_stat_button"
+                                icon="fa-truck" invisible="not picking_id"
+                                groups="stock.group_stock_user">
+                            <div class="o_stat_info">
+                                <span class="o_stat_text">Flare Transfer</span>
+                            </div>
+                        </button>
                     </div>
                     <widget name="web_ribbon" title="Cancelled" bg_color="text-bg-secondary"
                             invisible="state != 'cancelled'"/>
@@ -195,6 +202,9 @@
                                 <group>
                                     <field name="flares_fired" readonly="state != 'launched'"/>
                                     <field name="material_released_g"/>
+                                    <field name="flare_batches" invisible="not flare_batches"/>
+                                    <field name="picking_id" invisible="not picking_id"
+                                           groups="stock.group_stock_user"/>
                                     <field name="observed_rainfall_mm" invisible="not rainfall_recorded_at"/>
                                     <field name="rainfall_recorded_at" invisible="not rainfall_recorded_at"/>
                                 </group>

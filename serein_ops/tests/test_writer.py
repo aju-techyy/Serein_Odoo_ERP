@@ -49,7 +49,7 @@ class TestWriter(TransactionCase):
             'name': 'Hygroscopic Flare 1 kg', 'type': 'consu', 'is_storable': True,
             'is_seeding_flare': True, 'grams_per_flare': 1000,
         })
-        cls.env['stock.quant']._update_available_quantity(cls.flare, cls.base.location_id, 40)
+        cls.env['stock.quant']._update_available_quantity(cls.flare, cls.base.location_id, 200)
         cls.king_air = cls.env['maintenance.equipment'].create({
             'name': 'King Air 350', 'is_aircraft': True, 'aircraft_type': 'crewed',
             'home_base_id': cls.base.id, 'service_interval_hours': 100,
@@ -329,6 +329,7 @@ class TestWriter(TransactionCase):
         self.assertEqual(sent['flares'], {
             'product': 'Hygroscopic Flare 1 kg', 'loaded': 12, 'fired': 10, 'grams_per_flare': 1000,
             'material_released_g': 10000, 'material_released_kg': 10,
+            'batches': [],  # this flare is not tracked by batch
         })
         self.assertEqual(sent['client'], 'Northwind Water Authority')
         self.assertIsNone(sent['observed_rainfall_mm'])

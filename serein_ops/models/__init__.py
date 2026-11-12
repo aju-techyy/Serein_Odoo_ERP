@@ -13,3 +13,4 @@ from . import mission_writer
 from . import maintenance_equipment
 from . import hr_employee
 from . import product_template
+from . import stock

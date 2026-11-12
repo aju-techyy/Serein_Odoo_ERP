@@ -195,7 +195,7 @@ class TestReadiness(TransactionCase):
     # 5 Aircraft airworthy --------------------------------------------------
 
     def test_check_5_airworthy_passes(self):
-        self.assertCheck(self._mission(), 'aircraft_airworthy', 'pass', 'no open corrective request')
+        self.assertCheck(self._mission(), 'aircraft_airworthy', 'pass', 'no open corrective or service request')
 
     def test_check_5_fails_with_open_corrective_request(self):
         self._ground(self.king_air)
