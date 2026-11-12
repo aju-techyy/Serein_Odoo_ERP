@@ -27,6 +27,9 @@
         <field name="arch" type="xml">
             <form>
                 <header>
+                    <button name="action_plan_with_ai" type="object" string="Plan with AI" class="oe_highlight"
+                            invisible="state != 'new'"
+                            help="Have the AI planner propose an aircraft, a pilot, a flare load, and a launch window. The proposal is checked by the readiness engine and waits for an operator's approval."/>
                     <button name="action_dismiss" type="object" string="Dismiss" invisible="state != 'new'"/>
                     <button name="action_reset" type="object" string="Reopen" invisible="state != 'dismissed'"/>
                     <field name="state" widget="statusbar" statusbar_visible="new,planned"/>

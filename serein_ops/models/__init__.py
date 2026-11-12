@@ -6,6 +6,9 @@ from . import seeding_weather_snapshot
 from . import seeding_cloud_alert
 from . import seeding_mission
 from . import seeding_readiness_check
+from . import seeding_ai_log
+from . import ai_service
+from . import mission_planner
 from . import maintenance_equipment
 from . import hr_employee
 from . import product_template

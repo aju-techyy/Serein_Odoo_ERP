@@ -13,6 +13,8 @@
               action="seeding_mission_action" sequence="15"/>
     <menuitem id="menu_serein_snapshots" name="Weather Snapshots" parent="menu_serein_operations"
               action="seeding_weather_snapshot_action" sequence="20"/>
+    <menuitem id="menu_serein_ai_log" name="AI Activity" parent="menu_serein_operations"
+              action="seeding_ai_log_action" sequence="40"/>
 
     <menuitem id="menu_serein_clients" name="Clients" parent="menu_serein_root" sequence="20"/>
     <menuitem id="menu_serein_contracts" name="Contracts" parent="menu_serein_clients"

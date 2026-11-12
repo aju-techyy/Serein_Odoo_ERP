@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <data noupdate="1">
+        <record id="param_gemini_model" model="ir.config_parameter">
+            <field name="key">serein_ops.gemini_model</field>
+            <field name="value">gemini-3.5-flash-lite</field>
+        </record>
+    </data>
+</odoo>

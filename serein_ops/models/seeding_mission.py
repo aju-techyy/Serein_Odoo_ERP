@@ -1,11 +1,18 @@
 from odoo import _, api, fields, models
 from odoo.exceptions import UserError
 
+# Checks a different aircraft, pilot, or flare load can fix (5 to 11).
+# Checks 1 to 4 depend on the contract and the alert.
+ASSET_CHECKS = {
+    'aircraft_airworthy', 'aircraft_free', 'rack_capacity',
+    'pilot_licence', 'pilot_medical', 'duty_hours', 'flares_in_stock',
+}
+
 # Fields that define the plan. They can change only while the mission is
 # proposed, and changing any of them re-runs the readiness checks.
 PLANNING_FIELDS = {
     'alert_id', 'area_id', 'contract_id', 'base_id', 'aircraft_id', 'pilot_id',
-    'flare_product_id', 'flares_planned', 'planned_takeoff',
+    'flare_product_id', 'flares_planned', 'planned_takeoff', 'launch_by',
 }
 
 
@@ -81,6 +88,22 @@ class SeedingMission(models.Model):
         default=lambda self: self._default_flare_product(),
     )
     flares_planned = fields.Integer(string='Flares Planned', tracking=True)
+    launch_by = fields.Datetime(
+        string='Launch By', tracking=True,
+        help="Latest takeoff that still reaches the seedable window.",
+    )
+
+    # Planner --------------------------------------------------------------
+    plan_reasoning = fields.Text(string='Reasoning', readonly=True, copy=False)
+    plan_risks = fields.Text(string='Risks', readonly=True, copy=False)
+    fallback_reason = fields.Char(
+        string='Fallback Reason', readonly=True, copy=False,
+        help="Why the rule-based planner made this plan instead of the AI planner.",
+    )
+    replan_count = fields.Integer(string='Re-plan Rounds', readonly=True, copy=False)
+    can_replan = fields.Boolean(compute='_compute_can_replan')
+    ai_log_ids = fields.One2many('seeding.ai.log', 'mission_id', string='AI Calls')
+    ai_log_count = fields.Integer(compute='_compute_ai_log_count')
 
     # Readiness ------------------------------------------------------------
     readiness_ids = fields.One2many(
@@ -166,6 +189,29 @@ class SeedingMission(models.Model):
                 mission.readiness_state = 'not_run'
             else:
                 mission.readiness_state = 'fail' if failed else 'pass'
+
+    @api.depends('state', 'alert_id', 'replan_count', 'readiness_ids.result', 'readiness_ids.code')
+    def _compute_can_replan(self):
+        max_rounds = self.env['seeding.mission.planner'].max_replans()
+        for mission in self:
+            mission.can_replan = (
+                mission.state == 'proposed' and bool(mission.alert_id)
+                and mission.replan_count < max_rounds
+                and bool(mission._replannable_failures())
+            )
+
+    def _replannable_failures(self):
+        """Failed checks that a different aircraft, pilot, or flare load can fix."""
+        self.ensure_one()
+        return self.readiness_ids.filtered(lambda c: c.result == 'fail' and c.code in ASSET_CHECKS)
+
+    @api.depends('ai_log_ids')
+    def _compute_ai_log_count(self):
+        counts = dict(self.env['seeding.ai.log'].sudo()._read_group(
+            [('mission_id', 'in', self.ids)], ['mission_id'], ['__count'],
+        )) if self.ids else {}
+        for mission in self:
+            mission.ai_log_count = counts.get(mission._origin, 0)
 
     @api.depends('takeoff_at', 'landing_at')
     def _compute_flight_hours(self):
@@ -320,6 +366,39 @@ class SeedingMission(models.Model):
         self.alert_id.filtered(lambda a: a.state == 'new').write({'state': 'planned'})
         self._run_readiness()
         return True
+
+    def action_replan(self):
+        self.ensure_one()
+        result = self.env['seeding.mission.planner'].replan(self)
+        if result is True:
+            return True
+        if result == 'pass':
+            title, message, kind = _("Nothing to re-plan"), _("Every readiness check passes now."), 'info'
+        else:
+            failed = self.readiness_ids.filtered(lambda c: c.result == 'fail')
+            title, kind = _("Re-plan cannot fix these checks"), 'warning'
+            message = _(
+                "Re-plan changes the aircraft, pilot, or flare load. These checks depend on the "
+                "contract or the alert: %s.", ', '.join(failed.mapped('name')),
+            )
+        return {
+            'type': 'ir.actions.client',
+            'tag': 'display_notification',
+            'params': {
+                'title': title,
+                'message': message,
+                'type': kind,
+                'sticky': kind == 'warning',
+                'next': {'type': 'ir.actions.client', 'tag': 'soft_reload'},
+            },
+        }
+
+    def action_view_ai_logs(self):
+        self.ensure_one()
+        action = self.env['ir.actions.act_window']._for_xml_id('serein_ops.seeding_ai_log_action')
+        action['domain'] = [('mission_id', '=', self.id)]
+        action['context'] = {}
+        return action
 
     def action_rerun_checks(self):
         if any(m.state not in ('proposed', 'ready') for m in self):

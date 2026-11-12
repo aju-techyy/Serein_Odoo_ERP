@@ -69,6 +69,9 @@
                     <button name="action_complete" type="object" string="Complete" class="oe_highlight"
                             invisible="state != 'launched'"
                             help="Record the landing (now, unless entered) and close the flight."/>
+                    <button name="action_replan" type="object" string="Re-plan" class="btn-primary"
+                            invisible="not can_replan"
+                            help="Send the failed checks to the AI planner and ask for a different plan (two rounds at most)."/>
                     <button name="action_rerun_checks" type="object" string="Re-run Checks"
                             invisible="state not in ('proposed', 'ready')"/>
                     <button name="action_reset_to_proposed" type="object" string="Back to Proposed"
@@ -79,8 +82,19 @@
                            statusbar_visible="proposed,ready,launched,completed,billed"/>
                 </header>
                 <sheet>
+                    <field name="can_replan" invisible="1"/>
+                    <div class="oe_button_box" name="button_box">
+                        <button name="action_view_ai_logs" type="object" class="oe_stat_button"
+                                icon="fa-commenting-o" invisible="not ai_log_count">
+                            <field name="ai_log_count" widget="statinfo" string="AI Calls"/>
+                        </button>
+                    </div>
                     <widget name="web_ribbon" title="Cancelled" bg_color="text-bg-secondary"
                             invisible="state != 'cancelled'"/>
+                    <div class="alert alert-warning" role="alert"
+                         invisible="planned_by != 'rules' or not fallback_reason">
+                        Planned by rules. <field name="fallback_reason" nolabel="1" class="d-inline"/>
+                    </div>
                     <div class="alert alert-danger" role="alert"
                          invisible="readiness_state != 'fail' or state not in ('proposed', 'ready')">
                         <field name="failed_check_count" nolabel="1"/> readiness check(s) failed.
@@ -99,6 +113,7 @@
                                    options="{'no_create': True}"/>
                             <field name="partner_id"/>
                             <field name="planned_takeoff" readonly="state != 'proposed'"/>
+                            <field name="launch_by" readonly="state != 'proposed'"/>
                             <field name="planned_by"/>
                         </group>
                         <group string="Assets">
@@ -115,6 +130,20 @@
                         </group>
                     </group>
                     <notebook>
+                        <page string="Plan" name="plan" invisible="planned_by == 'human' and not plan_reasoning">
+                            <group>
+                                <group>
+                                    <field name="planned_by"/>
+                                    <field name="replan_count"/>
+                                </group>
+                            </group>
+                            <group string="Reasoning">
+                                <field name="plan_reasoning" nolabel="1" colspan="2"/>
+                            </group>
+                            <group string="Risks" invisible="not plan_risks">
+                                <field name="plan_risks" nolabel="1" colspan="2"/>
+                            </group>
+                        </page>
                         <page string="Readiness" name="readiness">
                             <group>
                                 <group>

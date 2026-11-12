@@ -152,6 +152,17 @@ class SeedingCloudAlert(models.Model):
             'target': 'current',
         }
 
+    def action_plan_with_ai(self):
+        self.ensure_one()
+        mission = self.env['seeding.mission.planner'].plan_alert(self)
+        return {
+            'type': 'ir.actions.act_window',
+            'res_model': 'seeding.mission',
+            'res_id': mission.id,
+            'view_mode': 'form',
+            'target': 'current',
+        }
+
     def action_dismiss(self):
         if any(a.state != 'new' for a in self):
             raise UserError(_("Only a new alert can be dismissed."))

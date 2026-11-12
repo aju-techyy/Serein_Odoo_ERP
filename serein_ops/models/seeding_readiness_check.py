@@ -1,4 +1,4 @@
-from odoo import _, fields, models
+from odoo import _, api, fields, models
 
 # (number, code, label, method). The order is the order shown on the mission.
 READINESS_CHECKS = [
@@ -72,6 +72,18 @@ class SeedingMission(models.Model):
             mission.sudo().readiness_checked_at = now
         self.invalidate_recordset(['readiness_ids', 'readiness_state', 'failed_check_count'])
         return True
+
+    @api.model
+    def _evaluate_plan(self, vals, origin=None):
+        """Run every check on an unsaved plan. Returns the failed checks as
+        (label, explanation) pairs. Nothing is written."""
+        record = self.sudo().new(vals, origin=origin)
+        failed = []
+        for _number, _code, label, method in READINESS_CHECKS:
+            result, explanation = getattr(record, method)()
+            if result == FAIL:
+                failed.append((label, explanation))
+        return failed
 
     def _flight_date(self):
         """The day the checks are judged for: the planned takeoff day, or
@@ -193,7 +205,7 @@ class SeedingMission(models.Model):
         flying = self.search([
             ('aircraft_id', '=', aircraft.id),
             ('state', '=', 'launched'),
-            ('id', '!=', self.id),
+            ('id', '!=', self._origin.id or 0),
         ], limit=1)
         if flying:
             return FAIL, _(
