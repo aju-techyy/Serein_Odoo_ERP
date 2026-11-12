@@ -24,6 +24,8 @@ class TestPlanner(TransactionCase):
     @classmethod
     def setUpClass(cls):
         super().setUpClass()
+        # No key outside the mocked calls: Mark Ready drafts a briefing.
+        cls.startClassPatcher(patch.dict(os.environ, {API_KEY_ENV: ''}))
         today = fields.Date.context_today(cls.env.user)
         cls.now = fields.Datetime.now().replace(second=0, microsecond=0)
 

@@ -4,7 +4,9 @@ from odoo import _, api, fields, models
 from odoo.exceptions import UserError
 
 from .seeding_readiness_check import READINESS_CHECKS
+from .seeding_weather_snapshot import WIND_CALM, WIND_LIMIT
 
+_WIND_CALM, _WIND_LIMIT = '%g' % WIND_CALM, '%g' % WIND_LIMIT
 MAX_REPLANS = 2
 WINDOW_TOLERANCE = timedelta(minutes=15)
 TIME_FORMAT = '%Y-%m-%d %H:%M'
@@ -50,7 +52,10 @@ Rules:
 - Prefer the plan that releases the most seeding material while passing every check.
 - reasoning: three to five plain sentences for the operations team, referring to
   the weather readings and to why these assets were chosen over the others.
-- risks: short phrases, one per risk you see. Use an empty list if there are none.
+- risks: short phrases, one per real risk to the flight or the seeding. Describe each
+  in proportion to the readings: wind and gusts up to """ + _WIND_CALM + """ km/h are light (the
+  score gives full wind points), and wind scores nothing from """ + _WIND_LIMIT + """ km/h. A favourable
+  reading, such as light wind, is not a risk. Use an empty list if there are none.
 """
 
 REPLAN_INSTRUCTIONS = PLAN_INSTRUCTIONS + """

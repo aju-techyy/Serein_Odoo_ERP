@@ -1,6 +1,6 @@
 {
     'name': 'Serein',
-    'version': '19.0.1.3.0',
+    'version': '19.0.1.4.0',
     'summary': 'Cloud seeding operations: weather monitoring, mission planning, fleet, and billing',
     'description': """
 Plans and tracks cloud seeding missions for client contracts: live weather
@@ -36,6 +36,7 @@ checks, aircraft and crew, flare stock, maintenance, and invoicing.
         'views/hr_employee_views.xml',
         'views/product_template_views.xml',
         'views/serein_menus.xml',
+        'report/seeding_mission_report.xml',
     ],
     'application': True,
     'installable': True,

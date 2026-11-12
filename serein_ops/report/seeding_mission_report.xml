@@ -1,0 +1,180 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <!-- Printed from the mission's "Print Report" button, which requires an
+         approved client summary. Times are UTC, as everywhere in Serein. -->
+    <record id="action_report_seeding_mission" model="ir.actions.report">
+        <field name="name">Mission Report</field>
+        <field name="model">seeding.mission</field>
+        <field name="report_type">qweb-pdf</field>
+        <field name="report_name">serein_ops.report_seeding_mission</field>
+        <field name="report_file">serein_ops.report_seeding_mission</field>
+        <field name="print_report_name">'Mission Report - %s' % object.name</field>
+    </record>
+
+    <template id="report_seeding_mission_document">
+        <t t-call="web.external_layout">
+            <t t-set="snap" t-value="o.alert_id.snapshot_id"/>
+            <t t-set="plane" t-value="o.aircraft_id"/>
+            <div class="page">
+                <h2>Mission Report <span t-out="o.name"/></h2>
+
+                <table class="table table-sm table-borderless mt-3" name="mission_overview">
+                    <tr>
+                        <td class="w-25"><strong>Client</strong></td>
+                        <td t-out="o.partner_id.name or '-'"/>
+                        <td class="w-25"><strong>Contract</strong></td>
+                        <td t-out="o.contract_id.name or '-'"/>
+                    </tr>
+                    <tr>
+                        <td><strong>Target Area</strong></td>
+                        <td>
+                            <span t-out="o.area_id.name"/>
+                            <span t-if="o.area_id.country_id">, <t t-out="o.area_id.country_id.name"/></span>
+                        </td>
+                        <td><strong>Area Centre</strong></td>
+                        <td>
+                            <t t-out="'%.4f, %.4f' % (o.area_id.latitude, o.area_id.longitude)"/>
+                            (radius <t t-out="'%g' % o.area_id.radius_km"/> km)
+                        </td>
+                    </tr>
+                    <tr>
+                        <td><strong>Status</strong></td>
+                        <td t-out="dict(o._fields['state'].selection).get(o.state)"/>
+                        <td><strong>Planned By</strong></td>
+                        <td t-out="dict(o._fields['planned_by'].selection).get(o.planned_by)"/>
+                    </tr>
+                </table>
+
+                <h4 class="mt-4">Flight</h4>
+                <table class="table table-sm" name="flight">
+                    <tr>
+                        <td class="w-25"><strong>Aircraft</strong></td>
+                        <td>
+                            <span t-out="plane.name"/>
+                            <span t-if="plane.tail_number"> (<t t-out="plane.tail_number"/>)</span>,
+                            <t t-out="dict(plane._fields['aircraft_type'].selection).get(plane.aircraft_type) or 'Crewed'"/>
+                        </td>
+                        <td class="w-25"><strong>Base</strong></td>
+                        <td t-out="o.base_id.name or '-'"/>
+                    </tr>
+                    <tr>
+                        <td><strong t-out="'Drone Operator' if o.pilot_id.pilot_role == 'drone_operator' else 'Pilot'"/></td>
+                        <td t-out="o.pilot_id.name or '-'"/>
+                        <td><strong>Flight Time</strong></td>
+                        <td><t t-out="'%.2f' % o.flight_hours"/> h</td>
+                    </tr>
+                    <tr>
+                        <td><strong>Takeoff</strong></td>
+                        <td t-out="o._utc_text(o.takeoff_at) or '-'"/>
+                        <td><strong>Landing</strong></td>
+                        <td t-out="o._utc_text(o.landing_at) or '-'"/>
+                    </tr>
+                </table>
+
+                <h4 class="mt-4">Flares and Material Released</h4>
+                <table class="table table-sm" name="flares">
+                    <thead>
+                        <tr>
+                            <th>Flare</th>
+                            <th class="text-end">Loaded</th>
+                            <th class="text-end">Fired</th>
+                            <th class="text-end">Per Flare (g)</th>
+                            <th class="text-end">Material Released (g)</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr>
+                            <td t-out="o.flare_product_id.display_name or '-'"/>
+                            <td class="text-end" t-out="o.flares_planned"/>
+                            <td class="text-end" t-out="o.flares_fired"/>
+                            <td class="text-end" t-out="'%g' % o.flare_product_id.grams_per_flare"/>
+                            <td class="text-end" t-out="'%g' % o.material_released_g"/>
+                        </tr>
+                    </tbody>
+                </table>
+
+                <h4 class="mt-4">Weather Behind the Mission</h4>
+                <t t-if="o.alert_id">
+                    <p>
+                        Cloud alert <strong t-out="o.alert_id.name"/>, forecast readings for
+                        <t t-out="o._utc_text(snap.valid_for)"/>.
+                        Seedability score <strong t-out="o.alert_id.score"/> of 100
+                        (<t t-out="o.alert_id.score_breakdown"/>).
+                    </p>
+                    <table class="table table-sm" name="weather">
+                        <tr>
+                            <td>Low cloud</td><td class="text-end"><t t-out="'%g' % snap.cloud_cover_low"/> %</td>
+                            <td>CAPE</td><td class="text-end"><t t-out="'%g' % snap.cape"/> J/kg</td>
+                        </tr>
+                        <tr>
+                            <td>Mid cloud</td><td class="text-end"><t t-out="'%g' % snap.cloud_cover_mid"/> %</td>
+                            <td>Lifted index</td><td class="text-end" t-out="'%g' % snap.lifted_index"/>
+                        </tr>
+                        <tr>
+                            <td>High cloud</td><td class="text-end"><t t-out="'%g' % snap.cloud_cover_high"/> %</td>
+                            <td>Wind / gusts</td>
+                            <td class="text-end"><t t-out="'%g' % snap.wind_speed"/> / <t t-out="'%g' % snap.wind_gusts"/> km/h</td>
+                        </tr>
+                        <tr>
+                            <td>Relative humidity</td><td class="text-end"><t t-out="'%g' % snap.relative_humidity"/> %</td>
+                            <td>Precipitation probability</td>
+                            <td class="text-end"><t t-out="'%g' % snap.precipitation_probability"/> %</td>
+                        </tr>
+                    </table>
+                    <p class="small text-muted">Weather data by Open-Meteo.com (CC BY 4.0).</p>
+                </t>
+                <p t-else="">This mission was planned without a cloud alert.</p>
+
+                <h4 class="mt-4">Observed Rainfall</h4>
+                <p t-if="o.rainfall_recorded_at">
+                    <t t-out="'%g' % o.observed_rainfall_mm"/> mm over the target area
+                    (recorded <t t-out="o._utc_text(o.rainfall_recorded_at)"/>).
+                </p>
+                <p t-else="">Not recorded yet.</p>
+
+                <!-- Eleven rows fit on one page: keep the heading and the table together. -->
+                <div style="page-break-inside: avoid;" name="readiness_section">
+                <h4 class="mt-4">Readiness Checks</h4>
+                <p t-if="o.readiness_checked_at" class="small text-muted">
+                    Last run <t t-out="o._utc_text(o.readiness_checked_at)"/>, before launch.
+                </p>
+                <table class="table table-sm" name="readiness">
+                    <thead>
+                        <tr>
+                            <th>#</th>
+                            <th>Check</th>
+                            <th>Result</th>
+                            <th>Explanation</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr t-foreach="o.readiness_ids" t-as="check" style="page-break-inside: avoid;">
+                            <td t-out="check.sequence"/>
+                            <td t-out="check.name"/>
+                            <td t-out="dict(check._fields['result'].selection).get(check.result)"/>
+                            <td t-out="check.explanation"/>
+                        </tr>
+                    </tbody>
+                </table>
+                </div>
+
+                <div style="page-break-inside: avoid;">
+                    <h4 class="mt-4">Mission Summary</h4>
+                    <t t-if="o.summary_reviewed_by">
+                        <div style="white-space: pre-line;" t-out="o.client_summary"/>
+                        <p class="small text-muted mt-2" name="summary_note" t-out="o.summary_note"/>
+                    </t>
+                    <p t-else="">The mission summary is awaiting review.</p>
+                </div>
+            </div>
+        </t>
+    </template>
+
+    <template id="report_seeding_mission">
+        <t t-call="web.html_container">
+            <t t-foreach="docs" t-as="o">
+                <t t-call="serein_ops.report_seeding_mission_document"/>
+            </t>
+        </t>
+    </template>
+</odoo>

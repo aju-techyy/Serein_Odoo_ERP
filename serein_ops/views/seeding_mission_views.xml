@@ -14,6 +14,10 @@
                 <field name="flares_planned" optional="show"/>
                 <field name="flight_hours" optional="hide" sum="Total"/>
                 <field name="planned_by" optional="hide"/>
+                <field name="material_released_g" optional="hide" sum="Total"/>
+                <field name="summary_state" optional="hide" widget="badge"
+                       decoration-warning="summary_state == 'to_review'"
+                       decoration-success="summary_state == 'approved'"/>
                 <field name="readiness_state" widget="badge"
                        decoration-success="readiness_state == 'pass'"
                        decoration-danger="readiness_state == 'fail'"/>
@@ -72,6 +76,17 @@
                     <button name="action_replan" type="object" string="Re-plan" class="btn-primary"
                             invisible="not can_replan"
                             help="Send the failed checks to the AI planner and ask for a different plan (two rounds at most)."/>
+                    <button name="action_review_briefing" type="object" string="Mark Briefing Reviewed"
+                            invisible="state not in ('ready', 'launched') or not briefing or briefing_reviewed_by"
+                            help="Confirm that the crew briefing has been read and checked against the plan."/>
+                    <button name="action_approve_summary" type="object" string="Approve Summary" class="oe_highlight"
+                            invisible="state not in ('completed', 'billed') or summary_state != 'to_review'"
+                            help="Approve the client summary as it reads now. It then appears on the mission report."/>
+                    <button name="action_print_report" type="object" string="Print Report" class="oe_highlight"
+                            invisible="state not in ('completed', 'billed') or summary_state != 'approved'"/>
+                    <button name="action_reopen_summary" type="object" string="Reopen Summary"
+                            invisible="summary_state != 'approved'"
+                            help="Take the summary off the report so it can be edited, then approve it again."/>
                     <button name="action_rerun_checks" type="object" string="Re-run Checks"
                             invisible="state not in ('proposed', 'ready')"/>
                     <button name="action_reset_to_proposed" type="object" string="Back to Proposed"
@@ -179,8 +194,49 @@
                                 </group>
                                 <group>
                                     <field name="flares_fired" readonly="state != 'launched'"/>
+                                    <field name="material_released_g"/>
+                                    <field name="observed_rainfall_mm" invisible="not rainfall_recorded_at"/>
+                                    <field name="rainfall_recorded_at" invisible="not rainfall_recorded_at"/>
                                 </group>
                             </group>
+                        </page>
+                        <page string="Crew Briefing" name="briefing" invisible="not briefing">
+                            <div class="alert alert-warning" role="alert"
+                                 invisible="briefing_source != 'template' or not briefing_fallback_reason">
+                                <field name="briefing_fallback_reason" nolabel="1" class="d-inline"/>
+                            </div>
+                            <p class="text-muted"><field name="briefing_note" nolabel="1" class="d-inline"/></p>
+                            <div class="d-flex gap-2 mb-2" invisible="state != 'ready' or briefing_reviewed_by">
+                                <button name="action_redraft_briefing" type="object" string="Redraft Briefing"
+                                        class="btn-secondary" icon="fa-refresh"
+                                        help="Write the briefing again from the current plan."/>
+                            </div>
+                            <field name="briefing" nolabel="1" class="font-monospace"
+                                   readonly="state != 'ready' or briefing_reviewed_by"/>
+                        </page>
+                        <page string="Client Summary" name="client_summary"
+                              invisible="state not in ('completed', 'billed')">
+                            <div class="alert alert-info" role="alert" invisible="summary_state != 'to_review'">
+                                Check this summary against the mission record and edit it if needed.
+                                It appears on the mission report only after it is approved.
+                            </div>
+                            <div class="alert alert-warning" role="alert"
+                                 invisible="summary_source != 'template' or not summary_fallback_reason or summary_state == 'approved'">
+                                <field name="summary_fallback_reason" nolabel="1" class="d-inline"/>
+                            </div>
+                            <p class="text-muted"><field name="summary_note" nolabel="1" class="d-inline"/></p>
+                            <div class="d-flex gap-2 mb-2" invisible="summary_state != 'to_review'">
+                                <button name="action_redraft_summary" type="object" string="Redraft Summary"
+                                        class="btn-secondary" icon="fa-refresh"
+                                        help="Write the summary again from the mission record. Your edits are replaced."
+                                        confirm="Redraft the summary? Any edits you made are replaced."/>
+                            </div>
+                            <field name="summary_state" invisible="1"/>
+                            <field name="summary_reviewed_by" invisible="1"/>
+                            <field name="briefing_reviewed_by" invisible="1"/>
+                            <field name="client_summary" nolabel="1"
+                                   readonly="summary_state == 'approved'"
+                                   placeholder="The summary is drafted when the mission is completed."/>
                         </page>
                         <page string="Notes" name="notes">
                             <field name="note"/>
@@ -209,6 +265,7 @@
                         domain="[('state', 'in', ('completed', 'billed'))]"/>
                 <separator/>
                 <filter name="checks_failed" string="Checks Failed" domain="[('readiness_state', '=', 'fail')]"/>
+                <filter name="summary_to_review" string="Summary to Review" domain="[('summary_state', '=', 'to_review')]"/>
                 <separator/>
                 <filter name="planned_ai" string="Planned by AI" domain="[('planned_by', '=', 'ai')]"/>
                 <filter name="planned_rules" string="Planned by Rules" domain="[('planned_by', '=', 'rules')]"/>

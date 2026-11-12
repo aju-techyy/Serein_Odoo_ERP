@@ -8,6 +8,8 @@ ASSET_CHECKS = {
     'pilot_licence', 'pilot_medical', 'duty_hours', 'flares_in_stock',
 }
 
+TEXT_SOURCES = [('ai', 'AI'), ('template', 'Mission record template')]
+
 # Fields that define the plan. They can change only while the mission is
 # proposed, and changing any of them re-runs the readiness checks.
 PLANNING_FIELDS = {
@@ -123,7 +125,48 @@ class SeedingMission(models.Model):
         string='Flight Hours', compute='_compute_flight_hours', store=True,
     )
     flares_fired = fields.Integer(string='Flares Fired', tracking=True, copy=False)
+    material_released_g = fields.Float(
+        string='Material Released (g)', compute='_compute_material_released', store=True,
+        digits=(12, 1), help="Flares fired x grams of seeding material per flare.",
+    )
+    observed_rainfall_mm = fields.Float(
+        string='Observed Rainfall (mm)', readonly=True, copy=False, digits=(8, 1),
+        help="Rainfall observed over the target area after the flight.",
+    )
+    rainfall_recorded_at = fields.Datetime(string='Rainfall Recorded At', readonly=True, copy=False)
     note = fields.Html()
+
+    # Crew briefing (drafted when the mission becomes ready) ----------------
+    briefing = fields.Text(string='Crew Briefing', copy=False)
+    briefing_source = fields.Selection(
+        TEXT_SOURCES, string='Briefing Drafted By', readonly=True, copy=False,
+    )
+    briefing_model = fields.Char(string='Briefing Model', readonly=True, copy=False)
+    briefing_fallback_reason = fields.Char(readonly=True, copy=False)
+    briefing_drafted_at = fields.Datetime(string='Briefing Drafted At', readonly=True, copy=False)
+    briefing_reviewed_by = fields.Many2one(
+        'res.users', string='Briefing Reviewed By', readonly=True, copy=False,
+    )
+    briefing_reviewed_at = fields.Datetime(string='Briefing Reviewed At', readonly=True, copy=False)
+    briefing_note = fields.Char(compute='_compute_text_notes')
+
+    # Client summary (drafted on completion, approved before the report) ---
+    client_summary = fields.Text(string='Client Summary', copy=False)
+    summary_source = fields.Selection(
+        TEXT_SOURCES, string='Summary Drafted By', readonly=True, copy=False,
+    )
+    summary_model = fields.Char(string='Summary Model', readonly=True, copy=False)
+    summary_fallback_reason = fields.Char(readonly=True, copy=False)
+    summary_drafted_at = fields.Datetime(string='Summary Drafted At', readonly=True, copy=False)
+    summary_reviewed_by = fields.Many2one(
+        'res.users', string='Summary Approved By', readonly=True, copy=False, tracking=True,
+    )
+    summary_reviewed_at = fields.Datetime(string='Summary Approved At', readonly=True, copy=False)
+    summary_state = fields.Selection(
+        [('none', 'Not drafted'), ('to_review', 'To review'), ('approved', 'Approved')],
+        string='Summary', compute='_compute_summary_state', store=True,
+    )
+    summary_note = fields.Char(compute='_compute_text_notes')
 
     _flares_planned_positive = models.Constraint(
         'check(flares_planned >= 0)',
@@ -222,6 +265,56 @@ class SeedingMission(models.Model):
             else:
                 mission.flight_hours = 0.0
 
+    @api.depends('flares_fired', 'flare_product_id.grams_per_flare')
+    def _compute_material_released(self):
+        for mission in self:
+            mission.material_released_g = mission.flares_fired * mission.flare_product_id.grams_per_flare
+
+    @api.depends('client_summary', 'summary_reviewed_by')
+    def _compute_summary_state(self):
+        for mission in self:
+            if mission.summary_reviewed_by:
+                mission.summary_state = 'approved'
+            elif mission.client_summary:
+                mission.summary_state = 'to_review'
+            else:
+                mission.summary_state = 'none'
+
+    @api.depends('briefing_source', 'briefing_model', 'briefing_drafted_at', 'briefing_reviewed_by',
+                 'briefing_reviewed_at', 'summary_source', 'summary_model', 'summary_drafted_at',
+                 'summary_reviewed_by', 'summary_reviewed_at')
+    def _compute_text_notes(self):
+        for mission in self:
+            mission.briefing_note = mission._text_note(
+                mission.briefing_source, mission.briefing_model, mission.briefing_drafted_at,
+                mission.briefing_reviewed_by, mission.briefing_reviewed_at, _("Reviewed"),
+            )
+            mission.summary_note = mission._text_note(
+                mission.summary_source, mission.summary_model, mission.summary_drafted_at,
+                mission.summary_reviewed_by, mission.summary_reviewed_at, _("Reviewed and approved"),
+            )
+
+    def _text_note(self, source, model, drafted_at, reviewer, reviewed_at, reviewed_label):
+        """Who wrote a text and who reviewed it, in one sentence."""
+        if not source:
+            return False
+        if source == 'ai':
+            drafted = _("AI-drafted (%(model)s) on %(when)s.", model=model or _("language model"),
+                        when=self._utc_text(drafted_at))
+        else:
+            drafted = _("Written from the mission record on %s.", self._utc_text(drafted_at))
+        if reviewer:
+            review = _("%(label)s by %(name)s on %(when)s.", label=reviewed_label,
+                       name=reviewer.name, when=self._utc_text(reviewed_at))
+        else:
+            review = _("Not yet reviewed.")
+        return '%s %s' % (drafted, review)
+
+    @api.model
+    def _utc_text(self, moment):
+        """A stored (UTC) datetime as shown on the report and in the texts."""
+        return '%s UTC' % moment.strftime('%d %b %Y %H:%M') if moment else ''
+
     # CRUD -----------------------------------------------------------------
 
     @api.model_create_multi
@@ -249,6 +342,7 @@ class SeedingMission(models.Model):
                 ))
         if vals.get('state') in ('ready', 'launched'):
             self._ensure_ready_to_fly()
+        self._check_text_locks(vals)
         old_alerts = self.alert_id if 'alert_id' in vals else self.env['seeding.cloud.alert']
         result = super().write(vals)
         if 'alert_id' in vals:
@@ -268,6 +362,18 @@ class SeedingMission(models.Model):
         result = super().unlink()
         alerts.exists()._release_after_missions()
         return result
+
+    def _check_text_locks(self, vals):
+        """A reviewed briefing or an approved summary cannot be edited until
+        its review is reopened (the writer resets the reviewer itself)."""
+        if 'briefing' in vals and vals.get('briefing_reviewed_by', True):
+            if self.filtered('briefing_reviewed_by'):
+                raise UserError(_("The crew briefing has been reviewed and can no longer be edited."))
+        if 'client_summary' in vals and vals.get('summary_reviewed_by', True):
+            if self.filtered('summary_reviewed_by'):
+                raise UserError(_(
+                    "The client summary has been approved. Reopen it before editing.",
+                ))
 
     # Transitions ----------------------------------------------------------
 
@@ -313,7 +419,13 @@ class SeedingMission(models.Model):
         # The fresh results are kept even when the move is refused.
         self._run_readiness()
         blocked = self.filtered(lambda m: m.readiness_state != 'pass')
-        (self - blocked).write({'state': 'ready'})
+        ready = self - blocked
+        ready.write({'state': 'ready'})
+        # The briefing never blocks the move: on any AI problem the writer
+        # falls back to the template.
+        writer = self.env['seeding.mission.writer']
+        for mission in ready:
+            writer.write_briefing(mission)
         if blocked:
             return self._blocked_notification(blocked, _("Not ready: readiness checks failed"))
         return True
@@ -350,6 +462,7 @@ class SeedingMission(models.Model):
             if landing <= mission.takeoff_at:
                 raise UserError(_("Landing must be after takeoff on %s.", mission.name))
             mission.write({'state': 'completed', 'landing_at': landing})
+            self.env['seeding.mission.writer'].write_summary(mission)
         return True
 
     def action_cancel(self):
@@ -392,6 +505,71 @@ class SeedingMission(models.Model):
                 'next': {'type': 'ir.actions.client', 'tag': 'soft_reload'},
             },
         }
+
+    # Briefing and client summary -------------------------------------------
+
+    def action_redraft_briefing(self):
+        for mission in self:
+            if mission.state != 'ready' or mission.briefing_reviewed_by:
+                raise UserError(_("Only the unreviewed briefing of a ready mission can be redrafted."))
+            self.env['seeding.mission.writer'].write_briefing(mission)
+        return True
+
+    def action_review_briefing(self):
+        for mission in self:
+            if mission.state not in ('ready', 'launched') or not mission.briefing:
+                raise UserError(_("There is no briefing to review on %s.", mission.name))
+            if mission.briefing_reviewed_by:
+                continue
+            mission.write({
+                'briefing_reviewed_by': self.env.user.id,
+                'briefing_reviewed_at': fields.Datetime.now(),
+            })
+            mission.message_post(body=_("Crew briefing reviewed by %s.", self.env.user.name))
+        return True
+
+    def action_redraft_summary(self):
+        for mission in self:
+            if mission.state not in ('completed', 'billed') or mission.summary_reviewed_by:
+                raise UserError(_("Only the unapproved summary of a completed mission can be redrafted."))
+            self.env['seeding.mission.writer'].write_summary(mission)
+        return True
+
+    def action_approve_summary(self):
+        for mission in self:
+            if mission.state not in ('completed', 'billed'):
+                raise UserError(_("Only the summary of a completed mission can be approved."))
+            if not (mission.client_summary or '').strip():
+                raise UserError(_("The client summary of %s is empty.", mission.name))
+            if mission.summary_reviewed_by:
+                continue
+            mission.write({
+                'summary_reviewed_by': self.env.user.id,
+                'summary_reviewed_at': fields.Datetime.now(),
+            })
+            mission.message_post(body=_(
+                "Client summary approved by %s. It now appears on the mission report.", self.env.user.name,
+            ))
+        return True
+
+    def action_reopen_summary(self):
+        for mission in self:
+            if not mission.summary_reviewed_by:
+                continue
+            mission.write({'summary_reviewed_by': False, 'summary_reviewed_at': False})
+            mission.message_post(body=_(
+                "Client summary reopened for editing by %s. It is off the mission report until "
+                "approved again.", self.env.user.name,
+            ))
+        return True
+
+    def action_print_report(self):
+        for mission in self:
+            if mission.state not in ('completed', 'billed'):
+                raise UserError(_("The mission report is printed for completed missions."))
+            if not mission.summary_reviewed_by:
+                raise UserError(_("Approve the client summary of %s before printing the report.", mission.name))
+        return self.env.ref('serein_ops.action_report_seeding_mission').report_action(self)
 
     def action_view_ai_logs(self):
         self.ensure_one()

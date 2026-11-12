@@ -9,6 +9,7 @@ from . import seeding_readiness_check
 from . import seeding_ai_log
 from . import ai_service
 from . import mission_planner
+from . import mission_writer
 from . import maintenance_equipment
 from . import hr_employee
 from . import product_template

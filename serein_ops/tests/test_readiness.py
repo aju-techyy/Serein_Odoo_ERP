@@ -1,9 +1,13 @@
+import os
 from datetime import timedelta
+from unittest.mock import patch
 
 from odoo import fields
 from odoo.exceptions import AccessError, UserError
 from odoo.service.model import call_kw
 from odoo.tests import TransactionCase, new_test_user, tagged
+
+from odoo.addons.serein_ops.models.ai_service import API_KEY_ENV
 
 
 @tagged('post_install', '-at_install')
@@ -13,6 +17,9 @@ class TestReadiness(TransactionCase):
     @classmethod
     def setUpClass(cls):
         super().setUpClass()
+        # Mark Ready and Complete draft texts with the AI writer. Without a
+        # key it calls nothing and uses the template.
+        cls.startClassPatcher(patch.dict(os.environ, {API_KEY_ENV: ''}))
         today = fields.Date.context_today(cls.env.user)
         cls.today = today
         cls.now = fields.Datetime.now().replace(second=0, microsecond=0)
