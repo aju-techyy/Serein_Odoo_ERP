@@ -1,0 +1,126 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <record id="seeding_cloud_alert_view_list" model="ir.ui.view">
+        <field name="name">seeding.cloud.alert.list</field>
+        <field name="model">seeding.cloud.alert</field>
+        <field name="arch" type="xml">
+            <list decoration-muted="state in ('dismissed', 'expired')" decoration-info="source == 'replayed'">
+                <field name="name"/>
+                <field name="area_id"/>
+                <field name="partner_id" optional="show"/>
+                <field name="window_start"/>
+                <field name="window_end"/>
+                <field name="expires_at" optional="hide"/>
+                <field name="score" widget="progressbar"/>
+                <field name="source" widget="badge"
+                       decoration-success="source == 'live'" decoration-info="source == 'replayed'"/>
+                <field name="state" widget="badge"
+                       decoration-success="state == 'new'" decoration-info="state == 'planned'"
+                       decoration-muted="state in ('dismissed', 'expired')"/>
+            </list>
+        </field>
+    </record>
+
+    <record id="seeding_cloud_alert_view_form" model="ir.ui.view">
+        <field name="name">seeding.cloud.alert.form</field>
+        <field name="model">seeding.cloud.alert</field>
+        <field name="arch" type="xml">
+            <form>
+                <header>
+                    <button name="action_dismiss" type="object" string="Dismiss" invisible="state != 'new'"/>
+                    <button name="action_reset" type="object" string="Reopen" invisible="state != 'dismissed'"/>
+                    <field name="state" widget="statusbar" statusbar_visible="new,planned"/>
+                </header>
+                <sheet>
+                    <widget name="web_ribbon" title="Replayed" bg_color="text-bg-info" invisible="source != 'replayed'"/>
+                    <widget name="web_ribbon" title="Expired" bg_color="text-bg-secondary" invisible="state != 'expired'"/>
+                    <div class="alert alert-info" role="alert" invisible="source != 'replayed'">
+                        <field name="replay_label" nolabel="1"/>
+                    </div>
+                    <div class="oe_title">
+                        <h1><field name="name"/></h1>
+                    </div>
+                    <group>
+                        <group>
+                            <field name="snapshot_id" readonly="id" options="{'no_create': True}"/>
+                            <field name="area_id"/>
+                            <field name="partner_id"/>
+                            <field name="source"/>
+                            <field name="recorded_at"/>
+                        </group>
+                        <group string="Window">
+                            <field name="window_start" readonly="state != 'new'"/>
+                            <field name="window_end" readonly="state != 'new'"/>
+                            <field name="expires_at" readonly="state != 'new'"/>
+                        </group>
+                    </group>
+                    <group>
+                        <group string="Seedability Score">
+                            <field name="score" widget="progressbar"/>
+                            <field name="score_breakdown" string="Breakdown"/>
+                            <field name="threshold"/>
+                            <field name="score_formula" string="Calculation" class="text-muted"/>
+                        </group>
+                        <group string="Readings">
+                            <field name="cloud_cover_low"/>
+                            <field name="cloud_cover_mid"/>
+                            <field name="cloud_cover_high"/>
+                            <field name="cape"/>
+                            <field name="lifted_index"/>
+                            <field name="relative_humidity"/>
+                            <field name="precipitation_probability"/>
+                            <field name="wind_speed"/>
+                            <field name="wind_gusts"/>
+                        </group>
+                    </group>
+                    <notebook>
+                        <page string="Notes" name="notes">
+                            <field name="note"/>
+                        </page>
+                    </notebook>
+                    <p class="text-muted small">
+                        Weather data by <a href="https://open-meteo.com/" target="_blank">Open-Meteo.com</a>
+                        (<a href="https://creativecommons.org/licenses/by/4.0/" target="_blank">CC BY 4.0</a>).
+                    </p>
+                </sheet>
+                <chatter/>
+            </form>
+        </field>
+    </record>
+
+    <record id="seeding_cloud_alert_view_search" model="ir.ui.view">
+        <field name="name">seeding.cloud.alert.search</field>
+        <field name="model">seeding.cloud.alert</field>
+        <field name="arch" type="xml">
+            <search>
+                <field name="name"/>
+                <field name="area_id"/>
+                <field name="partner_id"/>
+                <filter name="open" string="Open" domain="[('state', '=', 'new')]"/>
+                <filter name="planned" string="Planned" domain="[('state', '=', 'planned')]"/>
+                <filter name="closed" string="Dismissed or Expired" domain="[('state', 'in', ('dismissed', 'expired'))]"/>
+                <separator/>
+                <filter name="live" string="Live" domain="[('source', '=', 'live')]"/>
+                <filter name="replayed" string="Replayed" domain="[('source', '=', 'replayed')]"/>
+                <filter name="manual" string="Manual" domain="[('source', '=', 'manual')]"/>
+                <group>
+                    <filter name="group_area" string="Target Area" context="{'group_by': 'area_id'}"/>
+                    <filter name="group_state" string="Status" context="{'group_by': 'state'}"/>
+                    <filter name="group_source" string="Source" context="{'group_by': 'source'}"/>
+                </group>
+            </search>
+        </field>
+    </record>
+
+    <record id="seeding_cloud_alert_action" model="ir.actions.act_window">
+        <field name="name">Cloud Alerts</field>
+        <field name="res_model">seeding.cloud.alert</field>
+        <field name="view_mode">list,form</field>
+        <field name="context">{'search_default_open': 1}</field>
+        <field name="help" type="html">
+            <p class="o_view_nocontent_smiling_face">No open cloud alerts</p>
+            <p>An alert is raised when a weather fetch scores at or above the seedability threshold,
+               or when recorded conditions are replayed from a weather snapshot.</p>
+        </field>
+    </record>
+</odoo>

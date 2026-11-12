@@ -1,0 +1,132 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <record id="seeding_weather_snapshot_view_list" model="ir.ui.view">
+        <field name="name">seeding.weather.snapshot.list</field>
+        <field name="model">seeding.weather.snapshot</field>
+        <field name="arch" type="xml">
+            <list create="0" edit="0" decoration-success="score &gt;= 60" decoration-muted="score &lt; 30">
+                <header>
+                    <button name="action_fetch_all_areas" type="object" string="Fetch all areas now"
+                            class="btn-primary" display="always"/>
+                </header>
+                <field name="valid_for"/>
+                <field name="area_id"/>
+                <field name="partner_id" optional="show"/>
+                <field name="cloud_cover_low" optional="show"/>
+                <field name="cloud_cover_mid" optional="show"/>
+                <field name="cloud_cover_high" optional="hide"/>
+                <field name="cape" optional="show"/>
+                <field name="lifted_index" optional="hide"/>
+                <field name="precipitation" optional="hide"/>
+                <field name="wind_speed" optional="show"/>
+                <field name="wind_gusts" optional="hide"/>
+                <field name="score"/>
+                <field name="alert_count" string="Alerts" optional="show"/>
+                <field name="fetched_at" optional="hide"/>
+            </list>
+        </field>
+    </record>
+
+    <record id="seeding_weather_snapshot_view_form" model="ir.ui.view">
+        <field name="name">seeding.weather.snapshot.form</field>
+        <field name="model">seeding.weather.snapshot</field>
+        <field name="arch" type="xml">
+            <form create="0" edit="0">
+                <header>
+                    <button name="action_replay" type="object" string="Replay recorded conditions"
+                            class="btn-primary"
+                            help="Raise an alert now from these saved real readings. The alert is labelled as a replay with the date they were recorded."/>
+                </header>
+                <sheet>
+                    <div class="oe_button_box" name="button_box">
+                        <button name="action_view_alerts" type="object" class="oe_stat_button" icon="fa-bell">
+                            <field name="alert_count" widget="statinfo" string="Alerts"/>
+                        </button>
+                    </div>
+                    <div class="oe_title">
+                        <h1><field name="name"/></h1>
+                    </div>
+                    <group>
+                        <group>
+                            <field name="area_id"/>
+                            <field name="partner_id"/>
+                            <field name="valid_for"/>
+                            <field name="fetched_at"/>
+                        </group>
+                        <group string="Seedability Score">
+                            <field name="score" widget="progressbar"/>
+                            <field name="cloud_points" string="Cloud points (max 50)"/>
+                            <field name="instability_points" string="Instability points (max 30)"/>
+                            <field name="wind_points" string="Wind points (max 20)"/>
+                        </group>
+                    </group>
+                    <group>
+                        <group string="Cloud">
+                            <field name="cloud_cover"/>
+                            <field name="cloud_cover_low"/>
+                            <field name="cloud_cover_mid"/>
+                            <field name="cloud_cover_high"/>
+                            <field name="relative_humidity"/>
+                            <field name="freezing_level"/>
+                        </group>
+                        <group string="Instability">
+                            <field name="cape"/>
+                            <field name="lifted_index"/>
+                            <field name="convective_inhibition"/>
+                        </group>
+                        <group string="Precipitation">
+                            <field name="precipitation"/>
+                            <field name="rain"/>
+                            <field name="showers"/>
+                            <field name="precipitation_probability"/>
+                        </group>
+                        <group string="Wind">
+                            <field name="wind_speed"/>
+                            <field name="wind_gusts"/>
+                            <field name="wind_direction"/>
+                        </group>
+                    </group>
+                    <notebook>
+                        <page string="Raw Response" name="raw">
+                            <field name="raw_response" class="font-monospace"/>
+                        </page>
+                    </notebook>
+                    <p class="text-muted small">
+                        Weather data by <a href="https://open-meteo.com/" target="_blank">Open-Meteo.com</a>
+                        (<a href="https://creativecommons.org/licenses/by/4.0/" target="_blank">CC BY 4.0</a>).
+                    </p>
+                </sheet>
+            </form>
+        </field>
+    </record>
+
+    <record id="seeding_weather_snapshot_view_search" model="ir.ui.view">
+        <field name="name">seeding.weather.snapshot.search</field>
+        <field name="model">seeding.weather.snapshot</field>
+        <field name="arch" type="xml">
+            <search>
+                <field name="area_id"/>
+                <field name="partner_id"/>
+                <filter name="seedable" string="Score 60 or more" domain="[('score', '&gt;=', 60)]"/>
+                <filter name="today" string="Fetched Today"
+                        domain="[('fetched_at', '&gt;=', context_today().strftime('%Y-%m-%d'))]"/>
+                <group>
+                    <filter name="group_area" string="Target Area" context="{'group_by': 'area_id'}"/>
+                    <filter name="group_partner" string="Client" context="{'group_by': 'partner_id'}"/>
+                    <filter name="group_valid_for" string="Day" context="{'group_by': 'valid_for:day'}"/>
+                </group>
+            </search>
+        </field>
+    </record>
+
+    <record id="seeding_weather_snapshot_action" model="ir.actions.act_window">
+        <field name="name">Weather Snapshots</field>
+        <field name="res_model">seeding.weather.snapshot</field>
+        <field name="view_mode">list,form</field>
+        <field name="help" type="html">
+            <p class="o_view_nocontent_empty_folder">No weather fetched yet</p>
+            <p>Click "Fetch all areas now", or "Fetch now" on a target area. Every fetch is saved here,
+               so recorded conditions can be replayed later.</p>
+        </field>
+    </record>
+</odoo>

@@ -11,6 +11,8 @@
                 <field name="latitude"/>
                 <field name="longitude"/>
                 <field name="radius_km"/>
+                <field name="last_fetched_at" optional="show"/>
+                <field name="last_score" optional="show"/>
             </list>
         </field>
     </record>
@@ -20,7 +22,20 @@
         <field name="model">seeding.target.area</field>
         <field name="arch" type="xml">
             <form>
+                <header>
+                    <button name="action_fetch_weather" type="object" string="Fetch now"
+                            class="btn-primary" invisible="not id"
+                            help="Fetch live conditions for this area from Open-Meteo and raise an alert if the score passes the threshold."/>
+                </header>
                 <sheet>
+                    <div class="oe_button_box" name="button_box">
+                        <button name="action_view_snapshots" type="object" class="oe_stat_button" icon="fa-cloud">
+                            <field name="snapshot_count" widget="statinfo" string="Snapshots"/>
+                        </button>
+                        <button name="action_view_alerts" type="object" class="oe_stat_button" icon="fa-bell">
+                            <field name="alert_count" widget="statinfo" string="Alerts"/>
+                        </button>
+                    </div>
                     <widget name="web_ribbon" title="Archived" bg_color="text-bg-danger" invisible="active"/>
                     <div class="oe_title">
                         <label for="name"/>
@@ -36,6 +51,10 @@
                             <field name="latitude"/>
                             <field name="longitude"/>
                             <field name="radius_km"/>
+                        </group>
+                        <group string="Weather">
+                            <field name="last_fetched_at"/>
+                            <field name="last_score"/>
                         </group>
                     </group>
                     <notebook>

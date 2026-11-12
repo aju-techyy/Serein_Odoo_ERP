@@ -8,5 +8,13 @@
             <field name="padding">4</field>
             <field name="company_id" eval="False"/>
         </record>
+
+        <record id="seq_seeding_cloud_alert" model="ir.sequence">
+            <field name="name">Cloud Alert</field>
+            <field name="code">seeding.cloud.alert</field>
+            <field name="prefix">ALR/%(year)s/</field>
+            <field name="padding">4</field>
+            <field name="company_id" eval="False"/>
+        </record>
     </data>
 </odoo>

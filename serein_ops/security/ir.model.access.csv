@@ -5,3 +5,7 @@ access_seeding_target_area_operator,seeding.target.area operator,model_seeding_t
 access_seeding_target_area_manager,seeding.target.area manager,model_seeding_target_area,group_serein_manager,1,1,1,1
 access_seeding_contract_operator,seeding.contract operator,model_seeding_contract,group_serein_operator,1,0,0,0
 access_seeding_contract_manager,seeding.contract manager,model_seeding_contract,group_serein_manager,1,1,1,1
+access_seeding_weather_snapshot_operator,seeding.weather.snapshot operator,model_seeding_weather_snapshot,group_serein_operator,1,0,1,0
+access_seeding_weather_snapshot_manager,seeding.weather.snapshot manager,model_seeding_weather_snapshot,group_serein_manager,1,1,1,1
+access_seeding_cloud_alert_operator,seeding.cloud.alert operator,model_seeding_cloud_alert,group_serein_operator,1,1,1,0
+access_seeding_cloud_alert_manager,seeding.cloud.alert manager,model_seeding_cloud_alert,group_serein_manager,1,1,1,1

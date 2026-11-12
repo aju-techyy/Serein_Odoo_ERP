@@ -17,8 +17,8 @@ class MaintenanceEquipment(models.Model):
     )
     service_interval_hours = fields.Float(
         string='Service Interval (h)', default=100.0, tracking=True,
-        help="Flight hours allowed between services. Illustrative value, "
-             "not an aviation regulation.",
+        help="Flight hours allowed between scheduled services, as set by the "
+             "maintenance programme for this aircraft.",
     )
     hours_since_service = fields.Float(
         string='Hours Since Service', compute='_compute_hours_since_service',

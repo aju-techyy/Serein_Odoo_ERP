@@ -24,7 +24,8 @@ class HrEmployee(models.Model):
     )
     weekly_duty_limit = fields.Float(
         string='Weekly Duty Limit (h)', default=30.0, tracking=True,
-        help="Illustrative value, not an aviation regulation.",
+        help="Maximum flight duty hours in any rolling 7 days, as set by the "
+             "operator's flight time limitations.",
     )
     pilot_currency_id = fields.Many2one(
         'res.currency', compute='_compute_pilot_currency_id',
