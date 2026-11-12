@@ -4,6 +4,8 @@ from . import seeding_contract
 from . import weather_service
 from . import seeding_weather_snapshot
 from . import seeding_cloud_alert
+from . import seeding_mission
+from . import seeding_readiness_check
 from . import maintenance_equipment
 from . import hr_employee
 from . import product_template

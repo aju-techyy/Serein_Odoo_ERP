@@ -16,5 +16,13 @@
             <field name="padding">4</field>
             <field name="company_id" eval="False"/>
         </record>
+
+        <record id="seq_seeding_mission" model="ir.sequence">
+            <field name="name">Seeding Mission</field>
+            <field name="code">seeding.mission</field>
+            <field name="prefix">MSN/%(year)s/</field>
+            <field name="padding">4</field>
+            <field name="company_id" eval="False"/>
+        </record>
     </data>
 </odoo>

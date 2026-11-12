@@ -75,6 +75,8 @@ class SeedingCloudAlert(models.Model):
     wind_speed = fields.Float(related='snapshot_id.wind_speed')
     wind_gusts = fields.Float(related='snapshot_id.wind_gusts')
     note = fields.Text()
+    mission_ids = fields.One2many('seeding.mission', 'alert_id', string='Missions')
+    mission_count = fields.Integer(compute='_compute_mission_count')
 
     _window_order = models.Constraint(
         'check(window_end > window_start)',
@@ -118,6 +120,27 @@ class SeedingCloudAlert(models.Model):
             )
             alert.score_formula = FORMULA_TEXT
             alert.threshold = threshold
+
+    @api.depends('mission_ids')
+    def _compute_mission_count(self):
+        for alert in self:
+            alert.mission_count = len(alert.mission_ids)
+
+    def action_view_missions(self):
+        self.ensure_one()
+        action = self.env['ir.actions.act_window']._for_xml_id('serein_ops.seeding_mission_action')
+        action['domain'] = [('alert_id', '=', self.id)]
+        action['context'] = {'default_alert_id': self.id}
+        return action
+
+    def _release_after_missions(self):
+        """A planned alert with no mission left (all cancelled or deleted)
+        is open again, or expired if its time has passed."""
+        now = fields.Datetime.now()
+        for alert in self.filtered(lambda a: a.state == 'planned'):
+            if alert.mission_ids.filtered(lambda m: m.state != 'cancelled'):
+                continue
+            alert.state = 'expired' if alert.expires_at and alert.expires_at <= now else 'new'
 
     def _open_form(self):
         self.ensure_one()

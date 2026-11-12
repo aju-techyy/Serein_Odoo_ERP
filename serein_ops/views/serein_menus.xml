@@ -9,6 +9,8 @@
     <menuitem id="menu_serein_operations" name="Operations" parent="menu_serein_root" sequence="10"/>
     <menuitem id="menu_serein_alerts" name="Cloud Alerts" parent="menu_serein_operations"
               action="seeding_cloud_alert_action" sequence="10"/>
+    <menuitem id="menu_serein_missions" name="Missions" parent="menu_serein_operations"
+              action="seeding_mission_action" sequence="15"/>
     <menuitem id="menu_serein_snapshots" name="Weather Snapshots" parent="menu_serein_operations"
               action="seeding_weather_snapshot_action" sequence="20"/>
 

@@ -53,3 +53,15 @@ class HrEmployee(models.Model):
     def _onchange_pilot_role(self):
         if self.pilot_role:
             self.is_pilot = True
+
+
+class HrEmployeePublic(models.Model):
+    _inherit = 'hr.employee.public'
+
+    # Operators are not HR users. They see employees through this public
+    # profile, and need these two to choose a pilot for a mission.
+    is_pilot = fields.Boolean(readonly=True)
+    pilot_role = fields.Selection(
+        [('pilot', 'Pilot (crewed aircraft)'), ('drone_operator', 'Drone operator')],
+        string='Flying Role', readonly=True,
+    )

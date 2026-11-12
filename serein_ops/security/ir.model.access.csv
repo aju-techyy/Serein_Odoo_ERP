@@ -9,3 +9,7 @@ access_seeding_weather_snapshot_operator,seeding.weather.snapshot operator,model
 access_seeding_weather_snapshot_manager,seeding.weather.snapshot manager,model_seeding_weather_snapshot,group_serein_manager,1,1,1,1
 access_seeding_cloud_alert_operator,seeding.cloud.alert operator,model_seeding_cloud_alert,group_serein_operator,1,1,1,0
 access_seeding_cloud_alert_manager,seeding.cloud.alert manager,model_seeding_cloud_alert,group_serein_manager,1,1,1,1
+access_seeding_mission_operator,seeding.mission operator,model_seeding_mission,group_serein_operator,1,1,1,0
+access_seeding_mission_manager,seeding.mission manager,model_seeding_mission,group_serein_manager,1,1,1,1
+access_seeding_readiness_check_operator,seeding.readiness.check operator,model_seeding_readiness_check,group_serein_operator,1,0,0,0
+access_seeding_readiness_check_manager,seeding.readiness.check manager,model_seeding_readiness_check,group_serein_manager,1,0,0,0

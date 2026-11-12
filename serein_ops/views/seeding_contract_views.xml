@@ -37,6 +37,11 @@
                     <field name="state" widget="statusbar" statusbar_visible="draft,active,closed"/>
                 </header>
                 <sheet>
+                    <div class="oe_button_box" name="button_box">
+                        <button name="action_view_missions" type="object" class="oe_stat_button" icon="fa-plane">
+                            <field name="mission_count" widget="statinfo" string="Missions"/>
+                        </button>
+                    </div>
                     <div class="oe_title">
                         <h1><field name="name"/></h1>
                     </div>

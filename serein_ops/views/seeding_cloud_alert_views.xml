@@ -32,6 +32,12 @@
                     <field name="state" widget="statusbar" statusbar_visible="new,planned"/>
                 </header>
                 <sheet>
+                    <div class="oe_button_box" name="button_box">
+                        <button name="action_view_missions" type="object" class="oe_stat_button"
+                                icon="fa-plane" invisible="not mission_count">
+                            <field name="mission_count" widget="statinfo" string="Missions"/>
+                        </button>
+                    </div>
                     <widget name="web_ribbon" title="Replayed" bg_color="text-bg-info" invisible="source != 'replayed'"/>
                     <widget name="web_ribbon" title="Expired" bg_color="text-bg-secondary" invisible="state != 'expired'"/>
                     <div class="alert alert-info" role="alert" invisible="source != 'replayed'">

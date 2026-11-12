@@ -31,9 +31,11 @@ class SeedingContract(models.Model):
         string='Flight-Hour Budget', required=True, tracking=True,
         help="Flight hours the client has bought for the season.",
     )
+    mission_ids = fields.One2many('seeding.mission', 'contract_id', string='Missions')
+    mission_count = fields.Integer(compute='_compute_mission_count')
     hours_used = fields.Float(
         string='Hours Used', compute='_compute_hours_used',
-        help="Flight hours of this contract's missions.",
+        help="Flight hours of this contract's completed and billed missions.",
     )
     hours_remaining = fields.Float(compute='_compute_hours_used')
     standby_fee = fields.Monetary(
@@ -77,11 +79,24 @@ class SeedingContract(models.Model):
                 vals['name'] = self.env['ir.sequence'].next_by_code('seeding.contract') or _('New')
         return super().create(vals_list)
 
+    @api.depends('flight_hour_budget', 'mission_ids.state', 'mission_ids.flight_hours')
     def _compute_hours_used(self):
-        # Missions arrive in Phase 3. Until then no hours are flown.
         for contract in self:
-            contract.hours_used = 0.0
+            flown = contract.mission_ids.filtered(lambda m: m.state in ('completed', 'billed'))
+            contract.hours_used = sum(flown.mapped('flight_hours'))
             contract.hours_remaining = contract.flight_hour_budget - contract.hours_used
+
+    @api.depends('mission_ids')
+    def _compute_mission_count(self):
+        for contract in self:
+            contract.mission_count = len(contract.mission_ids)
+
+    def action_view_missions(self):
+        self.ensure_one()
+        action = self.env['ir.actions.act_window']._for_xml_id('serein_ops.seeding_mission_action')
+        action['domain'] = [('contract_id', '=', self.id)]
+        action['context'] = {'default_contract_id': self.id}
+        return action
 
     @api.constrains('partner_id', 'area_ids')
     def _check_areas_belong_to_client(self):

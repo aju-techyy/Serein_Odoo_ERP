@@ -1,0 +1,207 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <record id="seeding_mission_view_list" model="ir.ui.view">
+        <field name="name">seeding.mission.list</field>
+        <field name="model">seeding.mission</field>
+        <field name="arch" type="xml">
+            <list decoration-muted="state == 'cancelled'">
+                <field name="name"/>
+                <field name="planned_takeoff"/>
+                <field name="partner_id" optional="show"/>
+                <field name="area_id"/>
+                <field name="aircraft_id"/>
+                <field name="pilot_id"/>
+                <field name="flares_planned" optional="show"/>
+                <field name="flight_hours" optional="hide" sum="Total"/>
+                <field name="planned_by" optional="hide"/>
+                <field name="readiness_state" widget="badge"
+                       decoration-success="readiness_state == 'pass'"
+                       decoration-danger="readiness_state == 'fail'"/>
+                <field name="state" widget="badge"
+                       decoration-info="state == 'proposed'"
+                       decoration-success="state in ('ready', 'completed', 'billed')"
+                       decoration-warning="state == 'launched'"
+                       decoration-muted="state == 'cancelled'"/>
+            </list>
+        </field>
+    </record>
+
+    <record id="seeding_mission_view_kanban" model="ir.ui.view">
+        <field name="name">seeding.mission.kanban</field>
+        <field name="model">seeding.mission</field>
+        <field name="arch" type="xml">
+            <kanban default_group_by="state" records_draggable="0" quick_create="0" sample="1">
+                <field name="readiness_state"/>
+                <templates>
+                    <t t-name="card">
+                        <field name="name" class="fw-bold fs-5"/>
+                        <field name="area_id"/>
+                        <field name="partner_id" class="text-muted"/>
+                        <span t-if="record.aircraft_id.raw_value"><field name="aircraft_id"/></span>
+                        <span t-if="record.pilot_id.raw_value"><field name="pilot_id"/></span>
+                        <field name="planned_takeoff"/>
+                        <footer>
+                            <field name="planned_by" widget="badge"/>
+                            <div class="ms-auto">
+                                <field name="readiness_state" widget="badge"
+                                       decoration-success="readiness_state == 'pass'"
+                                       decoration-danger="readiness_state == 'fail'"/>
+                            </div>
+                        </footer>
+                    </t>
+                </templates>
+            </kanban>
+        </field>
+    </record>
+
+    <record id="seeding_mission_view_form" model="ir.ui.view">
+        <field name="name">seeding.mission.form</field>
+        <field name="model">seeding.mission</field>
+        <field name="arch" type="xml">
+            <form>
+                <header>
+                    <button name="action_ready" type="object" string="Mark Ready" class="oe_highlight"
+                            invisible="state != 'proposed'"
+                            help="Re-run the readiness checks and move the mission to ready if all pass."/>
+                    <button name="action_launch" type="object" string="Launch" class="oe_highlight"
+                            invisible="state != 'ready'"
+                            help="Re-run the readiness checks and record the takeoff if all pass."/>
+                    <button name="action_complete" type="object" string="Complete" class="oe_highlight"
+                            invisible="state != 'launched'"
+                            help="Record the landing (now, unless entered) and close the flight."/>
+                    <button name="action_rerun_checks" type="object" string="Re-run Checks"
+                            invisible="state not in ('proposed', 'ready')"/>
+                    <button name="action_reset_to_proposed" type="object" string="Back to Proposed"
+                            invisible="state not in ('ready', 'cancelled')"/>
+                    <button name="action_cancel" type="object" string="Cancel"
+                            invisible="state not in ('proposed', 'ready')"/>
+                    <field name="state" widget="statusbar"
+                           statusbar_visible="proposed,ready,launched,completed,billed"/>
+                </header>
+                <sheet>
+                    <widget name="web_ribbon" title="Cancelled" bg_color="text-bg-secondary"
+                            invisible="state != 'cancelled'"/>
+                    <div class="alert alert-danger" role="alert"
+                         invisible="readiness_state != 'fail' or state not in ('proposed', 'ready')">
+                        <field name="failed_check_count" nolabel="1"/> readiness check(s) failed.
+                        The mission cannot be marked ready or launched until every check passes.
+                    </div>
+                    <div class="oe_title">
+                        <h1><field name="name"/></h1>
+                    </div>
+                    <group>
+                        <group string="Opportunity">
+                            <field name="alert_id" readonly="state != 'proposed'"
+                                   options="{'no_create': True}"/>
+                            <field name="area_id" readonly="state != 'proposed'"
+                                   options="{'no_create': True}"/>
+                            <field name="contract_id" readonly="state != 'proposed'"
+                                   options="{'no_create': True}"/>
+                            <field name="partner_id"/>
+                            <field name="planned_takeoff" readonly="state != 'proposed'"/>
+                            <field name="planned_by"/>
+                        </group>
+                        <group string="Assets">
+                            <field name="aircraft_id" readonly="state != 'proposed'"
+                                   options="{'no_create': True}"/>
+                            <field name="aircraft_type" invisible="not aircraft_id"/>
+                            <field name="base_id" readonly="state != 'proposed'"
+                                   options="{'no_create': True}"/>
+                            <field name="pilot_id" readonly="state != 'proposed'"
+                                   options="{'no_create': True}"/>
+                            <field name="flare_product_id" readonly="state != 'proposed'"
+                                   options="{'no_create': True}"/>
+                            <field name="flares_planned" readonly="state != 'proposed'"/>
+                        </group>
+                    </group>
+                    <notebook>
+                        <page string="Readiness" name="readiness">
+                            <group>
+                                <group>
+                                    <field name="readiness_state" widget="badge"
+                                           decoration-success="readiness_state == 'pass'"
+                                           decoration-danger="readiness_state == 'fail'"/>
+                                </group>
+                                <group>
+                                    <field name="readiness_checked_at"/>
+                                </group>
+                            </group>
+                            <field name="readiness_ids" nolabel="1">
+                                <list create="0" edit="0" delete="0" no_open="1"
+                                      decoration-success="result == 'pass'"
+                                      decoration-danger="result == 'fail'"
+                                      decoration-muted="result == 'na'">
+                                    <field name="sequence"/>
+                                    <field name="name"/>
+                                    <field name="result" widget="badge"
+                                           decoration-success="result == 'pass'"
+                                           decoration-danger="result == 'fail'"
+                                           decoration-muted="result == 'na'"/>
+                                    <field name="explanation"/>
+                                </list>
+                            </field>
+                        </page>
+                        <page string="Flight" name="flight" invisible="state in ('proposed', 'ready', 'cancelled')">
+                            <group>
+                                <group>
+                                    <field name="takeoff_at" readonly="state != 'launched'"/>
+                                    <field name="landing_at" readonly="state != 'launched'"/>
+                                    <field name="flight_hours" widget="float_time"/>
+                                </group>
+                                <group>
+                                    <field name="flares_fired" readonly="state != 'launched'"/>
+                                </group>
+                            </group>
+                        </page>
+                        <page string="Notes" name="notes">
+                            <field name="note"/>
+                        </page>
+                    </notebook>
+                </sheet>
+                <chatter/>
+            </form>
+        </field>
+    </record>
+
+    <record id="seeding_mission_view_search" model="ir.ui.view">
+        <field name="name">seeding.mission.search</field>
+        <field name="model">seeding.mission</field>
+        <field name="arch" type="xml">
+            <search>
+                <field name="name"/>
+                <field name="area_id"/>
+                <field name="partner_id"/>
+                <field name="contract_id"/>
+                <field name="aircraft_id"/>
+                <field name="pilot_id"/>
+                <filter name="open" string="In Progress"
+                        domain="[('state', 'in', ('proposed', 'ready', 'launched'))]"/>
+                <filter name="done" string="Completed or Billed"
+                        domain="[('state', 'in', ('completed', 'billed'))]"/>
+                <separator/>
+                <filter name="checks_failed" string="Checks Failed" domain="[('readiness_state', '=', 'fail')]"/>
+                <separator/>
+                <filter name="planned_ai" string="Planned by AI" domain="[('planned_by', '=', 'ai')]"/>
+                <filter name="planned_rules" string="Planned by Rules" domain="[('planned_by', '=', 'rules')]"/>
+                <filter name="planned_human" string="Planned by Operator" domain="[('planned_by', '=', 'human')]"/>
+                <group>
+                    <filter name="group_state" string="Status" context="{'group_by': 'state'}"/>
+                    <filter name="group_partner" string="Client" context="{'group_by': 'partner_id'}"/>
+                    <filter name="group_area" string="Target Area" context="{'group_by': 'area_id'}"/>
+                    <filter name="group_aircraft" string="Aircraft" context="{'group_by': 'aircraft_id'}"/>
+                </group>
+            </search>
+        </field>
+    </record>
+
+    <record id="seeding_mission_action" model="ir.actions.act_window">
+        <field name="name">Missions</field>
+        <field name="res_model">seeding.mission</field>
+        <field name="view_mode">kanban,list,form</field>
+        <field name="help" type="html">
+            <p class="o_view_nocontent_smiling_face">Plan the first seeding mission</p>
+            <p>A mission assigns an aircraft, a pilot, and a flare load to a cloud alert.
+               Eleven readiness checks must pass before it can be marked ready or launched.</p>
+        </field>
+    </record>
+</odoo>
