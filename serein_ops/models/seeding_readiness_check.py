@@ -7,9 +7,9 @@ READINESS_CHECKS = [
     (3, 'hour_budget', 'Flight-hour budget', '_readiness_hour_budget'),
     (4, 'alert_valid', 'Alert still valid', '_readiness_alert_valid'),
     (5, 'aircraft_airworthy', 'Aircraft airworthy', '_readiness_aircraft_airworthy'),
-    (6, 'aircraft_free', 'Aircraft free', '_readiness_aircraft_free'),
+    (6, 'aircraft_free', 'Aircraft free and in range', '_readiness_aircraft_free'),
     (7, 'rack_capacity', 'Rack capacity', '_readiness_rack_capacity'),
-    (8, 'pilot_licence', 'Pilot licence', '_readiness_pilot_licence'),
+    (8, 'pilot_licence', 'Pilot licence and base', '_readiness_pilot_licence'),
     (9, 'pilot_medical', 'Pilot medical', '_readiness_pilot_medical'),
     (10, 'duty_hours', 'Pilot duty hours', '_readiness_duty_hours'),
     (11, 'flares_in_stock', 'Flares in stock', '_readiness_flares_in_stock'),
@@ -52,7 +52,7 @@ class SeedingMission(models.Model):
         """Evaluate every check and replace the mission's readiness lines.
         The lines are written as superuser: users can read them but never
         write a result by hand."""
-        now = fields.Datetime.now()
+        now = self._readiness_time()
         Check = self.env['seeding.readiness.check'].sudo()
         for mission in self:
             evaluated = mission.sudo()
@@ -85,10 +85,16 @@ class SeedingMission(models.Model):
                 failed.append((label, explanation))
         return failed
 
+    def _readiness_time(self):
+        """The moment the checks are judged at: now, or the `readiness_at`
+        context time when a mission is recorded after it flew (the time its
+        checks were run before takeoff)."""
+        return self.env.context.get('readiness_at') or fields.Datetime.now()
+
     def _flight_date(self):
         """The day the checks are judged for: the planned takeoff day, or
-        today if that is already past."""
-        today = fields.Date.context_today(self)
+        the day of the checks if that is already past."""
+        today = fields.Date.context_today(self, self._readiness_time())
         if self.planned_takeoff:
             return max(today, fields.Date.context_today(self, self.planned_takeoff))
         return today
@@ -157,7 +163,7 @@ class SeedingMission(models.Model):
         if alert.state == 'dismissed':
             return FAIL, _("Alert %s was dismissed.", alert.name)
         expires_at = alert.expires_at or alert.window_end
-        if alert.state == 'expired' or expires_at <= fields.Datetime.now():
+        if alert.state == 'expired' or expires_at <= self._readiness_time():
             return FAIL, _(
                 "Alert %(alert)s expired at %(time)s UTC.",
                 alert=alert.name, time=expires_at.strftime('%d %b %Y %H:%M'),
@@ -208,6 +214,12 @@ class SeedingMission(models.Model):
         aircraft = self.aircraft_id
         if not aircraft:
             return FAIL, _("No aircraft is assigned.")
+        base = aircraft.home_base_id
+        if base.area_ids and self.area_id and self.area_id not in base.area_ids:
+            return FAIL, _(
+                "%(aircraft)s flies from %(base)s, which does not serve %(area)s.",
+                aircraft=aircraft.display_name, base=base.name, area=self.area_id.name,
+            )
         flying = self.search([
             ('aircraft_id', '=', aircraft.id),
             ('state', '=', 'launched'),
@@ -217,6 +229,11 @@ class SeedingMission(models.Model):
             return FAIL, _(
                 "%(aircraft)s is flying mission %(mission)s.",
                 aircraft=aircraft.display_name, mission=flying.name,
+            )
+        if base.area_ids and self.area_id:
+            return PASS, _(
+                "%(aircraft)s is not on another launched mission, and %(base)s serves %(area)s.",
+                aircraft=aircraft.display_name, base=base.name, area=self.area_id.name,
             )
         return PASS, _("%s is not on another launched mission.", aircraft.display_name)
 
@@ -258,6 +275,13 @@ class SeedingMission(models.Model):
                 "%(pilot)s is a drone operator, and %(aircraft)s is a crewed aircraft.",
                 pilot=pilot.name, aircraft=self.aircraft_id.display_name,
             )
+        base = self.aircraft_id.home_base_id
+        if pilot.home_base_id and base and pilot.home_base_id != base:
+            return FAIL, _(
+                "%(pilot)s is based at %(pilot_base)s, and %(aircraft)s flies from %(base)s.",
+                pilot=pilot.name, pilot_base=pilot.home_base_id.name,
+                aircraft=self.aircraft_id.display_name, base=base.name,
+            )
         day = self._flight_date()
         if not pilot.licence_expiry:
             return FAIL, _("%s has no licence expiry date on file.", pilot.name)
@@ -265,6 +289,11 @@ class SeedingMission(models.Model):
             return FAIL, _(
                 "The licence of %(pilot)s expired on %(expiry)s.",
                 pilot=pilot.name, expiry=pilot.licence_expiry,
+            )
+        if pilot.home_base_id:
+            return PASS, _(
+                "The licence of %(pilot)s is valid until %(expiry)s, and they are based at %(base)s.",
+                pilot=pilot.name, expiry=pilot.licence_expiry, base=pilot.home_base_id.name,
             )
         return PASS, _(
             "The licence of %(pilot)s is valid until %(expiry)s.",
@@ -296,12 +325,13 @@ class SeedingMission(models.Model):
         pilot = self.pilot_id
         if not pilot:
             return FAIL, _("No pilot is assigned.")
+        duty = pilot._duty_hours_until(self._readiness_time())
         values = {
             'pilot': pilot.name,
-            'duty': _hours(pilot.duty_hours_7d),
+            'duty': _hours(duty),
             'limit': _hours(pilot.weekly_duty_limit),
         }
-        if pilot.duty_hours_7d >= pilot.weekly_duty_limit:
+        if duty >= pilot.weekly_duty_limit:
             return FAIL, _(
                 "%(pilot)s has %(duty)s duty hours in the last 7 days, which reaches the "
                 "weekly limit of %(limit)s h.", **values,

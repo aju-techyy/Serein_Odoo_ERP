@@ -27,9 +27,105 @@
                 <field name="name"/>
                 <field name="default_code"/>
                 <field name="grams_per_flare"/>
-                <field name="qty_available"/>
+                <field name="reordering_min_qty" column_invisible="1"/>
+                <field name="qty_available" string="On Hand"
+                       decoration-danger="qty_available &lt;= 0"
+                       decoration-warning="qty_available &gt; 0 and qty_available &lt; reordering_min_qty"
+                       decoration-success="qty_available &gt;= reordering_min_qty and qty_available &gt; 0"/>
                 <field name="uom_id" groups="uom.group_uom"/>
             </list>
+        </field>
+    </record>
+
+    <record id="product_template_view_form_flare" model="ir.ui.view">
+        <field name="name">product.template.form.flare</field>
+        <field name="model">product.template</field>
+        <field name="priority">50</field>
+        <field name="arch" type="xml">
+            <form string="Flare">
+                <sheet>
+                    <field name="company_id" invisible="1"/>
+                    <field name="active" invisible="1"/>
+                    <field name="is_seeding_flare" invisible="1"/>
+                    <field name="type" invisible="1"/>
+                    <field name="is_storable" invisible="1"/>
+                    <field name="purchase_ok" invisible="1"/>
+                    <field name="tracking" invisible="1"/>
+                    <field name="product_variant_count" invisible="1"/>
+                    <field name="cost_currency_id" invisible="1"/>
+                    <field name="uom_name" invisible="1"/>
+                    <div class="oe_button_box" name="button_box">
+                        <button name="action_open_quants" type="object" class="oe_stat_button"
+                                icon="fa-cubes" groups="stock.group_stock_user">
+                            <div class="o_field_widget o_stat_info">
+                                <span class="o_stat_value"><field name="qty_available" nolabel="1"/></span>
+                                <span class="o_stat_text">On Hand</span>
+                            </div>
+                        </button>
+                        <button name="action_view_stock_move_lines" type="object" class="oe_stat_button"
+                                icon="fa-exchange" groups="stock.group_stock_user">
+                            <div class="d-flex flex-column">
+                                <div class="o_field_widget o_stat_info align-items-baseline flex-row gap-1 me-1">
+                                    <span class="o_stat_text">In:</span>
+                                    <span class="o_stat_value"><field name="nbr_moves_in"/></span>
+                                </div>
+                                <div class="o_field_widget o_stat_info align-items-baseline flex-row gap-1 me-1">
+                                    <span class="o_stat_text">Out:</span>
+                                    <span class="o_stat_value"><field name="nbr_moves_out"/></span>
+                                </div>
+                            </div>
+                        </button>
+                        <button name="action_open_product_lot" type="object" class="oe_stat_button"
+                                icon="fa-bars" invisible="tracking == 'none'"
+                                groups="stock.group_production_lot">
+                            <div class="o_stat_info">
+                                <span class="o_stat_text">Batches</span>
+                            </div>
+                        </button>
+                        <button name="action_view_orderpoints" type="object" class="oe_stat_button"
+                                icon="fa-refresh" groups="stock.group_stock_user">
+                            <field name="nbr_reordering_rules" widget="statinfo" string="Reorder Rules"/>
+                        </button>
+                        <button name="action_view_po" type="object" class="oe_stat_button"
+                                icon="fa-credit-card" groups="purchase.group_purchase_user"
+                                help="Purchased in the last 365 days">
+                            <div class="o_field_widget o_stat_info">
+                                <span class="o_stat_value"><field name="purchased_product_qty" nolabel="1"/></span>
+                                <span class="o_stat_text">Purchased</span>
+                            </div>
+                        </button>
+                    </div>
+                    <widget name="web_ribbon" title="Archived" bg_color="text-bg-danger" invisible="active"/>
+                    <field name="image_1920" widget="image" class="oe_avatar"
+                           options="{'preview_image': 'image_128'}"/>
+                    <div class="oe_title">
+                        <label for="name" string="Flare"/>
+                        <h1><field name="name" placeholder="e.g. HF-1000 Hygroscopic Flare"/></h1>
+                    </div>
+                    <group>
+                        <group name="flare" string="Flare">
+                            <field name="default_code"/>
+                            <field name="grams_per_flare"/>
+                            <field name="standard_price" string="Cost per Flare"
+                                   widget="monetary" options="{'currency_field': 'cost_currency_id'}"/>
+                        </group>
+                        <group name="stock" string="Stock">
+                            <field name="qty_available" string="On Hand (all bases)"/>
+                            <field name="virtual_available" string="Forecasted"/>
+                        </group>
+                    </group>
+                    <notebook>
+                        <page string="Vendors" name="vendors" groups="purchase.group_purchase_user">
+                            <field name="seller_ids" nolabel="1"
+                                   context="{'default_product_tmpl_id': id, 'default_price': standard_price, 'product_template_invisible_variant': True, 'list_view_ref': 'purchase.product_supplierinfo_tree_view2'}"/>
+                        </page>
+                        <page string="Notes" name="notes">
+                            <field name="description" placeholder="Composition, handling, storage..."/>
+                        </page>
+                    </notebook>
+                </sheet>
+                <chatter/>
+            </form>
         </field>
     </record>
 
@@ -42,7 +138,7 @@
         <field name="view_ids" eval="[
             (5, 0, 0),
             (0, 0, {'view_mode': 'list', 'view_id': ref('product_template_view_list_flare')}),
-            (0, 0, {'view_mode': 'form', 'view_id': ref('product.product_template_only_form_view')}),
+            (0, 0, {'view_mode': 'form', 'view_id': ref('product_template_view_form_flare')}),
         ]"/>
         <field name="help" type="html">
             <p class="o_view_nocontent_smiling_face">Add the first seeding flare</p>

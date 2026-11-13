@@ -10,7 +10,7 @@ from odoo.tests import TransactionCase, new_test_user, tagged
 from odoo.tools import mute_logger
 
 from odoo.addons.serein_ops.models.seeding_weather_snapshot import seedability
-from odoo.addons.serein_ops.models.weather_service import HOURLY_FIELDS
+from odoo.addons.serein_ops.models.weather_service import HOURLY_FIELDS, hourly_slice
 
 SEEDABLE = {'cloud_cover_low': 80, 'cloud_cover_mid': 60, 'cape': 800, 'wind_speed': 15}
 CLEAR = {'cloud_cover_low': 0, 'cloud_cover_mid': 0, 'cape': 0, 'wind_speed': 10}
@@ -275,3 +275,32 @@ class TestWeather(TransactionCase):
             area.snapshot_ids.unlink()
         with self.assertRaises(AccessError):
             alert.unlink()
+
+    # Forecast archive --------------------------------------------------------
+
+    def test_history_fetch_and_archive_alert(self):
+        response = self._response(hours_seedable=4)
+        start = self.hour - timedelta(days=1)
+        with patch.object(self.Service, '_request_history', return_value=response) as mocked:
+            data = self.env['seeding.weather.service'].fetch_history(self.area, start.date(), self.hour.date())
+        mocked.assert_called_once()
+        sliced = hourly_slice(data, self.hour, 13)
+        self.assertEqual(sliced['hourly']['time'][0], self.hour.strftime('%Y-%m-%dT%H:%M'))
+        self.assertEqual(len(sliced['hourly']['time']), 13)
+        vals = self.env['seeding.weather.service']._parse(sliced, self.hour)
+        vals.update({'area_id': self.area.id, 'raw_response': json.dumps(sliced), 'data_source': 'archive'})
+        snapshot = self.env['seeding.weather.snapshot'].create(vals)
+        alert = snapshot._raise_archive_alert()
+        self.assertEqual(alert.source, 'archive')
+        self.assertEqual(alert.window_start, self.hour)
+        self.assertEqual(alert.window_end, self.hour + timedelta(hours=4))
+        # A live snapshot never raises an archive alert.
+        live = self.env['seeding.weather.snapshot'].create(dict(vals, data_source='forecast'))
+        self.assertFalse(live._raise_archive_alert())
+
+    def test_history_fetch_network_failure_is_a_user_error(self):
+        with patch.object(self.Service, '_request_history',
+                          side_effect=requests.exceptions.ConnectionError('offline')):
+            with self.assertRaisesRegex(UserError, 'forecast archive'):
+                self.env['seeding.weather.service'].fetch_history(
+                    self.area, self.hour.date(), self.hour.date())

@@ -209,6 +209,8 @@ class TestPlanner(TransactionCase):
         self.assertEqual(data['contract']['reference'], self.contract.name)
         self.assertEqual({a['id'] for a in data['aircraft']}, {self.king_air.id, self.cessna.id, self.drone.id})
         self.assertEqual({p['id'] for p in data['pilots']}, {self.pilot.id, self.operator_crew.id})
+        self.assertIn('home_base_id', data['pilots'][0])
+        self.assertTrue(all(plane['reaches_target_area'] for plane in data['aircraft']))
         base = [b for b in data['bases'] if b['id'] == self.base.id][0]
         self.assertEqual(base['flares_on_hand'], 40)
         self.assertNotIn('failed_checks', data)
@@ -336,7 +338,7 @@ class TestPlanner(TransactionCase):
             'alert_id': alert.id, 'aircraft_id': self.drone.id, 'pilot_id': self.pilot.id,
             'base_id': self.base.id, 'flare_product_id': self.flare.id, 'flares_planned': 12,
         })
-        self.assertEqual({name for name, _e in failed}, {'Rack capacity', 'Pilot licence'})
+        self.assertEqual({name for name, _e in failed}, {'Rack capacity', 'Pilot licence and base'})
         self.assertEqual(self.env['seeding.mission'].search_count([]), missions)
         self.assertEqual(self.env['seeding.readiness.check'].search_count([]), checks)
 

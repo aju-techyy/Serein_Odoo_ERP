@@ -187,6 +187,33 @@ class TestReadiness(TransactionCase):
         mission.action_rerun_checks()
         self.assertCheck(mission, 'alert_valid', 'fail', 'expired at')
 
+    def test_checks_are_judged_at_the_readiness_time(self):
+        # A mission recorded after it flew is judged as its checks stood
+        # before takeoff: the alert was valid then, though it has expired since.
+        before = self.now - timedelta(days=3)
+        alert = self._alert(window_start=before, window_end=before + timedelta(hours=3))
+        mission = self.env['seeding.mission'].with_context(readiness_at=before + timedelta(minutes=10)).create({
+            'alert_id': alert.id, 'aircraft_id': self.king_air.id, 'pilot_id': self.pilot.id,
+            'flares_planned': 12, 'planned_takeoff': before,
+        })
+        self.assertCheck(mission, 'alert_valid', 'pass', 'is valid until')
+        self.assertEqual(mission.readiness_checked_at, before + timedelta(minutes=10))
+        # Re-run now, as an operator would.
+        mission = mission.with_context(readiness_at=None)
+        mission.action_rerun_checks()
+        self.assertCheck(mission, 'alert_valid', 'fail', 'expired at')
+
+    def test_duty_hours_up_to_a_moment(self):
+        landing = self.now - timedelta(days=2)
+        self.env['seeding.mission'].create({
+            'area_id': self.area.id, 'state': 'completed', 'flares_planned': 4, 'flares_fired': 0,
+            'aircraft_id': self.cessna.id, 'pilot_id': self.pilot.id,
+            'takeoff_at': landing - timedelta(hours=3), 'landing_at': landing,
+        })
+        self.assertEqual(self.pilot._duty_hours_until(self.now), 3.0)
+        self.assertEqual(self.pilot._duty_hours_until(landing - timedelta(minutes=1)), 0.0)
+        self.assertEqual(self.pilot._duty_hours_until(landing + timedelta(days=7, minutes=1)), 0.0)
+
     def test_check_4_not_applicable_without_alert(self):
         mission = self._mission(alert_id=False, area_id=self.area.id)
         self.assertCheck(mission, 'alert_valid', 'na')
@@ -214,6 +241,18 @@ class TestReadiness(TransactionCase):
         self.assertCheck(mission, 'aircraft_airworthy', 'pass')
 
     # 6 Aircraft free -------------------------------------------------------
+
+    def test_check_6_fails_when_the_base_does_not_serve_the_area(self):
+        self.base.area_ids = self.area_outside
+        self.assertCheck(self._mission(), 'aircraft_free', 'fail', 'which does not serve Northern Highlands')
+
+    def test_check_6_passes_when_the_base_serves_the_area(self):
+        self.base.area_ids = self.area
+        self.assertCheck(self._mission(), 'aircraft_free', 'pass', 'Coastal Airfield serves Northern Highlands')
+
+    def test_mission_aircraft_choice_follows_the_area(self):
+        domain = self.env['seeding.mission']._fields['aircraft_id'].domain
+        self.assertIn("home_base_id.area_ids", domain)
 
     def test_check_6_aircraft_free_passes(self):
         self.assertCheck(self._mission(), 'aircraft_free', 'pass')
@@ -253,6 +292,19 @@ class TestReadiness(TransactionCase):
     def test_check_8_fails_when_pilot_flies_drone(self):
         mission = self._mission(aircraft_id=self.drone.id, flares_planned=4)
         self.assertCheck(mission, 'pilot_licence', 'fail', 'a drone operator must fly it')
+
+    def test_check_8_pilot_at_the_aircraft_base_passes(self):
+        self.pilot.home_base_id = self.base
+        self.assertCheck(self._mission(), 'pilot_licence', 'pass', 'based at Coastal Airfield')
+
+    def test_check_8_fails_when_pilot_is_based_elsewhere(self):
+        other = self.env['seeding.base'].create({'name': 'Harbour Point Airfield'})
+        self.pilot.home_base_id = other
+        self.assertCheck(self._mission(), 'pilot_licence', 'fail', 'is based at Harbour Point Airfield')
+
+    def test_mission_pilot_choice_follows_the_aircraft_base(self):
+        domain = self.env['seeding.mission']._fields['pilot_id'].domain
+        self.assertIn("home_base_id", domain)
 
     def test_check_8_fails_with_no_pilot(self):
         self.assertCheck(self._mission(pilot_id=False), 'pilot_licence', 'fail', 'No pilot')

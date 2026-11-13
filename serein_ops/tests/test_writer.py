@@ -254,6 +254,32 @@ class TestWriter(TransactionCase):
             '• Seedable cloud dissipates before takeoff',
         ], "The record's launch-by line comes first and the model's copy of it is dropped")
 
+    def test_ai_abort_criterion_restating_launch_by_is_dropped(self):
+        mission = self._mission()
+        data = self._briefing(abort_criteria=[
+            "The launch-by time passes",
+            "Seedable cloud dissipates before the launch-by time",
+        ])
+        self._ready(mission, self._gemini(data))
+        self.assertEqual(mission.briefing_source, 'ai')
+        abort = mission.briefing.split('ABORT CRITERIA\n')[1].splitlines()
+        self.assertEqual(len(abort), 2, abort)
+        self.assertTrue(abort[0].startswith('• Do not take off after '))
+        self.assertEqual(abort[1], '• Seedable cloud dissipates before the launch-by time')
+
+    def test_inputs_name_the_flare_and_send_whole_numbers_as_integers(self):
+        mission = self._mission()
+        self.flare.default_code = 'HF-1000'
+        writer = self.env['seeding.mission.writer']
+        load = writer._briefing_input(mission)['load']
+        self.assertEqual(load['flare_product'], self.flare.name)
+        self.assertNotIn('[', load['flare_product'])
+        self.assertIsInstance(load['material_planned_g'], int)
+        self.assertIsInstance(load['grams_per_flare'], int)
+        flares = writer._summary_input(mission)['flares']
+        self.assertEqual(flares['product'], self.flare.name)
+        self.assertIsInstance(flares['material_released_g'], int)
+
     def test_briefing_network_failure_or_no_key_uses_template(self):
         mission = self._mission()
         _r, mocked = self._ready(mission, side_effect=requests.ConnectionError("offline"))

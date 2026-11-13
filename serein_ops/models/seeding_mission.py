@@ -8,6 +8,9 @@ from odoo.tools import float_compare
 from .weather_service import RAINFALL_SOURCE
 
 # Observed rainfall covers the takeoff hour to this many hours after the landing hour.
+# Missions that have flown: their hours count against the contract, the
+# aircraft's service interval, and the crew's duty.
+FLOWN_STATES = ('completed', 'billed')
 RAINFALL_HOURS_AFTER_LANDING = 24
 
 # Checks a different aircraft, pilot, or flare load can fix (5 to 11).
@@ -56,6 +59,7 @@ class SeedingMission(models.Model):
         [('ai', 'AI'), ('rules', 'Rules'), ('human', 'Operator')],
         string='Planned By', default='human', required=True, readonly=True, copy=False,
         tracking=True,
+        help="Who proposed the aircraft, crew, and load: AI planner, rule-based planner, or operator.",
     )
 
     # The plan -------------------------------------------------------------
@@ -78,10 +82,12 @@ class SeedingMission(models.Model):
     planned_takeoff = fields.Datetime(
         string='Planned Takeoff', tracking=True,
         compute='_compute_planned_takeoff', store=True, readonly=False, precompute=True,
+        help="Planned takeoff time. Filled from the alert window when planned from an alert.",
     )
     aircraft_id = fields.Many2one(
         'maintenance.equipment', string='Aircraft', tracking=True, index=True,
-        domain="[('is_aircraft', '=', True)]",
+        domain="[('is_aircraft', '=', True)] + (['|', ('home_base_id.area_ids', '=', False), "
+               "('home_base_id.area_ids', 'in', [area_id])] if area_id else [])",
     )
     aircraft_type = fields.Selection(related='aircraft_id.aircraft_type')
     base_id = fields.Many2one(
@@ -91,14 +97,17 @@ class SeedingMission(models.Model):
     )
     pilot_id = fields.Many2one(
         'hr.employee', string='Pilot', tracking=True, index=True,
-        domain="[('is_pilot', '=', True)]",
+        domain="[('is_pilot', '=', True)] + ([('home_base_id', 'in', [base_id, False])] if base_id else [])",
     )
     flare_product_id = fields.Many2one(
         'product.product', string='Flare', tracking=True,
         domain="[('is_seeding_flare', '=', True)]",
         default=lambda self: self._default_flare_product(),
     )
-    flares_planned = fields.Integer(string='Flares Planned', tracking=True)
+    flares_planned = fields.Integer(
+        string='Flares Planned', tracking=True,
+        help="Flares to load. They must fit the aircraft's rack and be in stock at the base.",
+    )
     launch_by = fields.Datetime(
         string='Launch By', tracking=True,
         help="Latest takeoff that still reaches the seedable window.",
@@ -123,17 +132,28 @@ class SeedingMission(models.Model):
     readiness_state = fields.Selection(
         [('not_run', 'Not run'), ('pass', 'All checks passed'), ('fail', 'Checks failed')],
         string='Readiness', compute='_compute_readiness_state', store=True,
+        help="Result of the latest run of the 11 readiness checks.",
     )
     failed_check_count = fields.Integer(compute='_compute_readiness_state', store=True)
     readiness_checked_at = fields.Datetime(string='Checks Run At', readonly=True, copy=False)
 
     # The flight -----------------------------------------------------------
-    takeoff_at = fields.Datetime(string='Takeoff', tracking=True, copy=False)
-    landing_at = fields.Datetime(string='Landing', tracking=True, copy=False)
+    takeoff_at = fields.Datetime(
+        string='Takeoff', tracking=True, copy=False,
+        help="Actual takeoff time, recorded on Launch.",
+    )
+    landing_at = fields.Datetime(
+        string='Landing', tracking=True, copy=False,
+        help="Actual landing time, recorded on Complete.",
+    )
     flight_hours = fields.Float(
         string='Flight Hours', compute='_compute_flight_hours', store=True,
+        help="Landing time minus takeoff time.",
     )
-    flares_fired = fields.Integer(string='Flares Fired', tracking=True, copy=False)
+    flares_fired = fields.Integer(
+        string='Flares Fired', tracking=True, copy=False,
+        help="Flares actually fired. On Complete they leave the base stock by batch.",
+    )
     material_released_g = fields.Float(
         string='Material Released (g)', compute='_compute_material_released', store=True,
         digits=(12, 1), help="Flares fired x grams of seeding material per flare.",
@@ -646,7 +666,7 @@ class SeedingMission(models.Model):
 
     def _check_rainfall_fetchable(self):
         self.ensure_one()
-        if self.state not in ('completed', 'billed'):
+        if self.state not in FLOWN_STATES:
             raise UserError(_("Observed rainfall is fetched for completed missions (%s).", self.name))
         if not self.takeoff_at or not self.landing_at:
             raise UserError(_("%s has no takeoff or landing time.", self.name))
@@ -777,14 +797,14 @@ class SeedingMission(models.Model):
 
     def action_redraft_summary(self):
         for mission in self:
-            if mission.state not in ('completed', 'billed') or mission.summary_reviewed_by:
+            if mission.state not in FLOWN_STATES or mission.summary_reviewed_by:
                 raise UserError(_("Only the unapproved summary of a completed mission can be redrafted."))
             self.env['seeding.mission.writer'].write_summary(mission)
         return True
 
     def action_approve_summary(self):
         for mission in self:
-            if mission.state not in ('completed', 'billed'):
+            if mission.state not in FLOWN_STATES:
                 raise UserError(_("Only the summary of a completed mission can be approved."))
             if not (mission.client_summary or '').strip():
                 raise UserError(_("The client summary of %s is empty.", mission.name))
@@ -812,7 +832,7 @@ class SeedingMission(models.Model):
 
     def action_print_report(self):
         for mission in self:
-            if mission.state not in ('completed', 'billed'):
+            if mission.state not in FLOWN_STATES:
                 raise UserError(_("The mission report is printed for completed missions."))
             if not mission.summary_reviewed_by:
                 raise UserError(_("Approve the client summary of %s before printing the report.", mission.name))
@@ -854,6 +874,18 @@ class SeedingMission(models.Model):
             'view_mode': 'form',
             'name': _("Flare Transfer"),
         }
+
+    @api.model
+    def _open_missions(self, domain, context=None, history=False):
+        """The Missions action filtered on `domain`. `history` opens the list
+        first, for an aircraft's or a pilot's past missions."""
+        action = self.env['ir.actions.act_window']._for_xml_id('serein_ops.seeding_mission_action')
+        action['domain'] = domain
+        action['context'] = context or {}
+        if history:
+            action['view_mode'] = 'list,form'
+            action['views'] = [(False, 'list'), (False, 'form')]
+        return action
 
     def action_view_ai_logs(self):
         self.ensure_one()

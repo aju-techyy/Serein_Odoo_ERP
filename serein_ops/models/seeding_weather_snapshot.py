@@ -2,6 +2,7 @@ from datetime import timedelta
 
 from odoo import _, api, fields, models
 from odoo.exceptions import UserError
+from odoo.fields import Domain
 
 from .weather_service import hourly_rows
 
@@ -42,6 +43,9 @@ FORMULA_TEXT = (
 )
 
 
+SCORE_BANDS = [('seedable', 'Seedable'), ('marginal', 'Marginal'), ('poor', 'Poor')]
+
+
 class SeedingWeatherSnapshot(models.Model):
     _name = 'seeding.weather.snapshot'
     _description = 'Weather Snapshot'
@@ -57,6 +61,13 @@ class SeedingWeatherSnapshot(models.Model):
     valid_for = fields.Datetime(
         string='Valid For', required=True,
         help="The forecast hour (start) these readings describe.",
+    )
+    data_source = fields.Selection(
+        [('forecast', 'Live Forecast'), ('archive', 'Forecast Archive')],
+        string='Data Source', required=True, default='forecast', readonly=True,
+        help="Live Forecast: fetched from the forecast feed for the current hour. Forecast "
+             "Archive: the forecast that was issued for a past hour, from Open-Meteo's "
+             "historical forecast archive.",
     )
 
     cloud_cover = fields.Float(string='Total Cloud (%)')
@@ -91,6 +102,10 @@ class SeedingWeatherSnapshot(models.Model):
         string='Seedability Score', compute='_compute_score', store=True, aggregator='max',
         help=FORMULA_TEXT,
     )
+    score_band = fields.Selection(
+        SCORE_BANDS, string='Seedability', compute='_compute_score_band', search='_search_score_band',
+        help="Seedable: at or above the alert threshold. Marginal: at least half of it.",
+    )
     alert_ids = fields.One2many('seeding.cloud.alert', 'snapshot_id', string='Alerts')
     alert_count = fields.Integer(compute='_compute_alert_count')
 
@@ -108,10 +123,55 @@ class SeedingWeatherSnapshot(models.Model):
                 snap.cloud_cover_low, snap.cloud_cover_mid, snap.cape, snap.wind_speed,
             )
 
+    @api.depends('score')
+    def _compute_score_band(self):
+        threshold = self._threshold()
+        for snap in self:
+            snap.score_band = self._band(snap.score, threshold)
+
+    def _search_score_band(self, operator, value):
+        if operator in ('=', '!='):
+            operator, value = ('in' if operator == '=' else 'not in'), [value]
+        if operator not in ('in', 'not in'):
+            return NotImplemented
+        threshold = self._threshold()
+        marginal = -(-threshold // 2)   # the smallest score that is at least half the threshold
+        ranges = {
+            'seedable': Domain('score', '>=', threshold),
+            'marginal': Domain('score', '<', threshold) & Domain('score', '>=', marginal),
+            'poor': Domain('score', '<', marginal),
+        }
+        domain = Domain.OR(ranges[band] for band in value if band in ranges)
+        return ~domain if operator == 'not in' else domain
+
+    @api.model
+    def _band(self, score, threshold):
+        if score >= threshold:
+            return 'seedable'
+        return 'marginal' if score * 2 >= threshold else 'poor'
+
     @api.depends('alert_ids')
     def _compute_alert_count(self):
         for snap in self:
             snap.alert_count = len(snap.alert_ids)
+
+    def _ai_readings(self):
+        """The readings sent to the planner and the writer, with their units."""
+        self.ensure_one()
+        return {
+            'cloud_cover_low_pct': self.cloud_cover_low,
+            'cloud_cover_mid_pct': self.cloud_cover_mid,
+            'cloud_cover_high_pct': self.cloud_cover_high,
+            'cape_j_per_kg': self.cape,
+            'lifted_index': self.lifted_index,
+            'convective_inhibition_j_per_kg': self.convective_inhibition,
+            'relative_humidity_pct': self.relative_humidity,
+            'precipitation_probability_pct': self.precipitation_probability,
+            'freezing_level_m': self.freezing_level,
+            'wind_speed_kmh': self.wind_speed,
+            'wind_gusts_kmh': self.wind_gusts,
+            'wind_direction_deg': self.wind_direction,
+        }
 
     @api.model
     def _threshold(self):
@@ -153,14 +213,26 @@ class SeedingWeatherSnapshot(models.Model):
         ], limit=1)
         if open_alert:
             return Alert
+        return Alert.create(self._alert_values('live', threshold))
+
+    def _raise_archive_alert(self):
+        """Raise an alert from a forecast-archive snapshot that passes the
+        threshold. Its window is the forecast's, as a live fetch would have
+        raised it then. Returns the alert or an empty recordset."""
+        self.ensure_one()
+        threshold = self._threshold()
+        if self.data_source != 'archive' or self.score < threshold:
+            return self.env['seeding.cloud.alert']
+        return self.env['seeding.cloud.alert'].create(self._alert_values('archive', threshold))
+
+    def _alert_values(self, source, threshold):
         hours = self._seedable_hours(threshold)
-        start = self.valid_for
-        return Alert.create({
+        return {
             'snapshot_id': self.id,
-            'source': 'live',
-            'window_start': start,
-            'window_end': start + timedelta(hours=hours),
-        })
+            'source': source,
+            'window_start': self.valid_for,
+            'window_end': self.valid_for + timedelta(hours=hours),
+        }
 
     def action_replay(self):
         """Raise an alert now from these saved real readings, labelled as a replay."""
@@ -183,7 +255,7 @@ class SeedingWeatherSnapshot(models.Model):
         return alert._open_form()
 
     def action_fetch_all_areas(self):
-        """'Fetch all areas now' button on the snapshot list. Not @api.model:
+        """'Fetch All Areas Now' button on the snapshot list. Not @api.model:
         list header buttons always send the selected ids (possibly none), so
         the method must accept a recordset. `self` is not used."""
         return self.env['seeding.target.area'].search([])._fetch_weather_safe()

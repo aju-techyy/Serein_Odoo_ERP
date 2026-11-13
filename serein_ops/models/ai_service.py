@@ -21,7 +21,7 @@ class SeedingAiService(models.AbstractModel):
     """Calls Google Gemini with a fixed JSON response schema and logs every
     call in seeding.ai.log.
 
-    Only `_request` talks to the network, so tests mock that one method.
+    Only `_request` talks to the network.
     The API key is read from the server environment and is never stored,
     logged, or sent anywhere but the request header."""
     _name = 'seeding.ai.service'

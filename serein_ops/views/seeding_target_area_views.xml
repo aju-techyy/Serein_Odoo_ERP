@@ -11,8 +11,11 @@
                 <field name="latitude"/>
                 <field name="longitude"/>
                 <field name="radius_km"/>
+                <field name="base_ids" widget="many2many_tags" optional="show"/>
                 <field name="last_fetched_at" optional="show"/>
-                <field name="last_score" optional="show"/>
+                <field name="last_score_band" column_invisible="1"/>
+                <field name="last_score" optional="show"
+                       decoration-success="last_score_band == 'seedable'" decoration-warning="last_score_band == 'marginal'"/>
             </list>
         </field>
     </record>
@@ -23,7 +26,7 @@
         <field name="arch" type="xml">
             <form>
                 <header>
-                    <button name="action_fetch_weather" type="object" string="Fetch now"
+                    <button name="action_fetch_weather" type="object" string="Fetch Now"
                             class="btn-primary" invisible="not id"
                             help="Fetch live conditions for this area from Open-Meteo and raise an alert if the score passes the threshold."/>
                 </header>
@@ -51,10 +54,13 @@
                             <field name="latitude"/>
                             <field name="longitude"/>
                             <field name="radius_km"/>
+                            <field name="base_ids" widget="many2many_tags"/>
                         </group>
                         <group string="Weather">
                             <field name="last_fetched_at"/>
                             <field name="last_score"/>
+                            <field name="last_score_band" widget="badge" invisible="not last_fetched_at"
+                                   decoration-success="last_score_band == 'seedable'" decoration-warning="last_score_band == 'marginal'"/>
                         </group>
                     </group>
                     <notebook>
@@ -64,7 +70,10 @@
                                     <field name="name"/>
                                     <field name="season_start"/>
                                     <field name="season_end"/>
-                                    <field name="state" widget="badge"/>
+                                    <field name="state" widget="badge"
+                                           decoration-info="state == 'draft'"
+                                           decoration-success="state == 'active'"
+                                           decoration-muted="state in ('closed', 'cancelled')"/>
                                 </list>
                             </field>
                         </page>

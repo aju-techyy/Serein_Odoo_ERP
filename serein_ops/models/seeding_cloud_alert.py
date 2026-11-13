@@ -26,9 +26,10 @@ class SeedingCloudAlert(models.Model):
     )
     partner_id = fields.Many2one(related='area_id.partner_id', string='Client', store=True)
     source = fields.Selection(
-        [('live', 'Live'), ('replayed', 'Replayed'), ('manual', 'Manual')],
+        [('live', 'Live'), ('archive', 'Forecast Archive'), ('replayed', 'Replayed'), ('manual', 'Manual')],
         required=True, default='manual', readonly=True, tracking=True,
-        help="Live: raised by a weather fetch. Replayed: raised from a saved "
+        help="Live: raised by a weather fetch. Forecast Archive: raised for a past "
+             "hour from the forecast issued then. Replayed: raised from a saved "
              "snapshot, recorded earlier. Manual: created by an operator.",
     )
     state = fields.Selection(
@@ -43,10 +44,12 @@ class SeedingCloudAlert(models.Model):
     window_start = fields.Datetime(
         string='Window Start', required=True, tracking=True,
         default=lambda self: fields.Datetime.now().replace(second=0, microsecond=0),
+        help="Start of the seedable window: the forecast hour that raised the alert.",
     )
     window_end = fields.Datetime(
         string='Window End', required=True, tracking=True,
         default=lambda self: fields.Datetime.now().replace(second=0, microsecond=0) + timedelta(hours=2),
+        help="End of the seedable window: consecutive forecast hours at or above the threshold, at most 6.",
     )
     expires_at = fields.Datetime(
         string='Expires At', compute='_compute_expires_at', store=True, readonly=False,
@@ -63,7 +66,10 @@ class SeedingCloudAlert(models.Model):
     wind_points = fields.Float(related='snapshot_id.wind_points')
     score_breakdown = fields.Char(compute='_compute_score_breakdown')
     score_formula = fields.Text(compute='_compute_score_breakdown')
-    threshold = fields.Integer(compute='_compute_score_breakdown', string='Alert Threshold')
+    threshold = fields.Integer(
+        compute='_compute_score_breakdown', string='Alert Threshold',
+        help="Lowest seedability score that raises an alert.",
+    )
 
     cloud_cover_low = fields.Float(related='snapshot_id.cloud_cover_low')
     cloud_cover_mid = fields.Float(related='snapshot_id.cloud_cover_mid')
@@ -128,10 +134,8 @@ class SeedingCloudAlert(models.Model):
 
     def action_view_missions(self):
         self.ensure_one()
-        action = self.env['ir.actions.act_window']._for_xml_id('serein_ops.seeding_mission_action')
-        action['domain'] = [('alert_id', '=', self.id)]
-        action['context'] = {'default_alert_id': self.id}
-        return action
+        return self.env['seeding.mission']._open_missions(
+            [('alert_id', '=', self.id)], {'default_alert_id': self.id})
 
     def _release_after_missions(self):
         """A planned alert with no mission left (all cancelled or deleted)

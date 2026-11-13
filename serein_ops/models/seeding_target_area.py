@@ -3,6 +3,8 @@ import logging
 from odoo import _, api, fields, models
 from odoo.exceptions import ValidationError
 
+from .seeding_weather_snapshot import SCORE_BANDS
+
 _logger = logging.getLogger(__name__)
 
 
@@ -21,14 +23,25 @@ class SeedingTargetArea(models.Model):
         help="The organisation that pays for seeding. Only companies can be clients.",
     )
     country_id = fields.Many2one('res.country', string='Country', tracking=True)
-    latitude = fields.Float(digits=(10, 6), required=True, tracking=True)
-    longitude = fields.Float(digits=(10, 6), required=True, tracking=True)
+    latitude = fields.Float(
+        digits=(10, 6), required=True, tracking=True,
+        help="Centre of the area in decimal degrees, north positive. Weather is fetched here.",
+    )
+    longitude = fields.Float(
+        digits=(10, 6), required=True, tracking=True,
+        help="Centre of the area in decimal degrees, east positive.",
+    )
     radius_km = fields.Float(
         string='Radius (km)', default=25.0, required=True, tracking=True,
+        help="Radius of the area around its centre.",
     )
     contract_ids = fields.Many2many(
         'seeding.contract', 'seeding_contract_area_rel', 'area_id', 'contract_id',
         string='Contracts', readonly=True,
+    )
+    base_ids = fields.Many2many(
+        'seeding.base', 'seeding_base_area_rel', 'area_id', 'base_id', string='Served From',
+        help="Bases whose aircraft fly to this area.",
     )
     note = fields.Text()
 
@@ -64,6 +77,9 @@ class SeedingTargetArea(models.Model):
     alert_count = fields.Integer(compute='_compute_weather_stats')
     last_fetched_at = fields.Datetime(string='Last Fetched', compute='_compute_weather_stats')
     last_score = fields.Integer(string='Last Score', compute='_compute_weather_stats')
+    last_score_band = fields.Selection(
+        SCORE_BANDS, string='Last Seedability', compute='_compute_weather_stats',
+    )
 
     @api.depends('snapshot_ids', 'alert_ids')
     def _compute_weather_stats(self):
@@ -73,6 +89,7 @@ class SeedingTargetArea(models.Model):
             area.alert_count = len(area.alert_ids)
             area.last_fetched_at = snapshots[:1].fetched_at
             area.last_score = snapshots[:1].score
+            area.last_score_band = snapshots[:1].score_band
 
     def _fetch_weather(self):
         """Fetch a snapshot for each area and raise live alerts.
@@ -87,7 +104,7 @@ class SeedingTargetArea(models.Model):
         return snapshots, alerts
 
     def action_fetch_weather(self):
-        """'Fetch now' button."""
+        """'Fetch Now' button."""
         snapshots, alerts = self._fetch_weather()
         lines = [
             _("%(area)s: score %(score)s.", area=snap.area_id.name, score=snap.score)

@@ -3,8 +3,12 @@ from datetime import datetime, time, timedelta
 from odoo import Command, _, api, fields, models
 from odoo.exceptions import UserError, ValidationError
 
+from .seeding_mission import FLOWN_STATES
+
 # Contracts that can be invoiced: the season is running, or it has ended.
 INVOICEABLE_STATES = ('active', 'closed')
+# The budget is "low" once this share of the flight-hour budget is used.
+BUDGET_LOW_SHARE = 0.8
 
 
 class SeedingContract(models.Model):
@@ -29,9 +33,16 @@ class SeedingContract(models.Model):
     area_ids = fields.Many2many(
         'seeding.target.area', 'seeding_contract_area_rel', 'contract_id', 'area_id',
         string='Target Areas', domain="[('partner_id', '=', partner_id)]",
+        help="Areas covered by the contract. They must belong to the contract's client.",
     )
-    season_start = fields.Date(required=True, tracking=True)
-    season_end = fields.Date(required=True, tracking=True)
+    season_start = fields.Date(
+        required=True, tracking=True,
+        help="First day of the seeding season. Standby days are billed from this day.",
+    )
+    season_end = fields.Date(
+        required=True, tracking=True,
+        help="Last day of the seeding season. Missions are planned only inside the season.",
+    )
     flight_hour_budget = fields.Float(
         string='Flight-Hour Budget', required=True, tracking=True,
         help="Flight hours the client has bought for the season.",
@@ -42,12 +53,23 @@ class SeedingContract(models.Model):
         string='Hours Used', compute='_compute_hours_used',
         help="Flight hours of this contract's completed and billed missions.",
     )
-    hours_remaining = fields.Float(compute='_compute_hours_used')
+    hours_remaining = fields.Float(
+        compute='_compute_hours_used',
+        help="Flight-hour budget minus the hours of completed and billed missions.",
+    )
+    budget_status = fields.Selection(
+        [('ok', 'Within Budget'), ('low', 'Budget Low'), ('used', 'Budget Used')],
+        string='Budget', compute='_compute_hours_used',
+        help="Budget Low: 80 % or more of the flight-hour budget used. Budget Used: none "
+             "left, so new missions fail the flight-hour budget check.",
+    )
     standby_fee = fields.Monetary(
         string='Standby Fee per Day', currency_field='currency_id', tracking=True,
+        help="Billed for every season day, whether or not a mission flies.",
     )
     flight_hour_rate = fields.Monetary(
         string='Flight-Hour Rate', currency_field='currency_id', tracking=True,
+        help="Billed for each flight hour of a completed mission.",
     )
     state = fields.Selection(
         [
@@ -88,10 +110,21 @@ class SeedingContract(models.Model):
 
     @api.depends('flight_hour_budget', 'mission_ids.state', 'mission_ids.flight_hours')
     def _compute_hours_used(self):
+        # Read from the database: a mission whose contract is computed on
+        # create can appear twice in the cached mission_ids of this transaction.
+        hours = dict(self.env['seeding.mission'].sudo()._read_group(
+            [('contract_id', 'in', self._origin.ids), ('state', 'in', FLOWN_STATES)],
+            ['contract_id'], ['flight_hours:sum'],
+        ))
         for contract in self:
-            flown = contract.mission_ids.filtered(lambda m: m.state in ('completed', 'billed'))
-            contract.hours_used = sum(flown.mapped('flight_hours'))
+            contract.hours_used = hours.get(contract._origin, 0.0)
             contract.hours_remaining = contract.flight_hour_budget - contract.hours_used
+            if contract.hours_used >= contract.flight_hour_budget:
+                contract.budget_status = 'used'
+            elif contract.hours_used >= BUDGET_LOW_SHARE * contract.flight_hour_budget:
+                contract.budget_status = 'low'
+            else:
+                contract.budget_status = 'ok'
 
     @api.depends('invoice_ids')
     def _compute_invoice_count(self):
@@ -103,15 +136,16 @@ class SeedingContract(models.Model):
 
     @api.depends('mission_ids')
     def _compute_mission_count(self):
+        counts = dict(self.env['seeding.mission'].sudo()._read_group(
+            [('contract_id', 'in', self._origin.ids)], ['contract_id'], ['__count'],
+        ))
         for contract in self:
-            contract.mission_count = len(contract.mission_ids)
+            contract.mission_count = counts.get(contract._origin, 0)
 
     def action_view_missions(self):
         self.ensure_one()
-        action = self.env['ir.actions.act_window']._for_xml_id('serein_ops.seeding_mission_action')
-        action['domain'] = [('contract_id', '=', self.id)]
-        action['context'] = {'default_contract_id': self.id}
-        return action
+        return self.env['seeding.mission']._open_missions(
+            [('contract_id', '=', self.id)], {'default_contract_id': self.id})
 
     @api.constrains('partner_id', 'area_ids')
     def _check_areas_belong_to_client(self):

@@ -23,6 +23,15 @@ class SeedingBase(models.Model):
         'maintenance.equipment', 'home_base_id', string='Aircraft',
     )
     aircraft_count = fields.Integer(compute='_compute_aircraft_count')
+    area_ids = fields.Many2many(
+        'seeding.target.area', 'seeding_base_area_rel', 'base_id', 'area_id',
+        string='Target Areas Served',
+        help="Areas this base's aircraft fly to. Without any, its aircraft may fly to every area.",
+    )
+    crew_ids = fields.One2many(
+        'hr.employee', 'home_base_id', string='Crew', groups='hr.group_hr_user',
+        domain=[('is_pilot', '=', True)],
+    )
     note = fields.Text()
 
     _name_uniq = models.Constraint(

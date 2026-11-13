@@ -10,12 +10,16 @@
                 <field name="season_start"/>
                 <field name="season_end"/>
                 <field name="flight_hour_budget"/>
-                <field name="hours_used"/>
+                <field name="budget_status" column_invisible="1"/>
+                <field name="hours_used" decoration-warning="budget_status == 'low'" decoration-danger="budget_status == 'used'"/>
+                <field name="hours_remaining" optional="show" decoration-warning="budget_status == 'low'" decoration-danger="budget_status == 'used'"/>
                 <field name="currency_id" column_invisible="1"/>
                 <field name="flight_hour_rate"/>
                 <field name="state" widget="badge"
                        decoration-info="state == 'draft'"
                        decoration-success="state == 'active'"/>
+                <field name="budget_status" widget="badge" optional="show"
+                       decoration-success="budget_status == 'ok'" decoration-warning="budget_status == 'low'" decoration-danger="budget_status == 'used'"/>
             </list>
         </field>
     </record>
@@ -70,6 +74,8 @@
                             <field name="flight_hour_budget" readonly="state in ('closed', 'cancelled')"/>
                             <field name="hours_used"/>
                             <field name="hours_remaining"/>
+                            <field name="budget_status" widget="badge"
+                                   decoration-success="budget_status == 'ok'" decoration-warning="budget_status == 'low'" decoration-danger="budget_status == 'used'"/>
                         </group>
                         <group string="Rates">
                             <field name="currency_id" invisible="1"/>

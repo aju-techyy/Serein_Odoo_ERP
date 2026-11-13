@@ -81,10 +81,10 @@ Sections:
   Leave out a planner risk the readings do not support. A favourable reading is not a hazard.
 - abort_criteria: one short line per change that must stop the takeoff or end the
   seeding run, for example: the seedable cloud dissipates or moves out of the target
-  area, conditions become worse than forecast, the launch-by time passes, or the
-  aircraft, crew or flare load differs from the plan. An abort criterion is a change
-  from the plan, never the current forecast: do not repeat a hazard or a reading as
-  an abort criterion. The launch-by line is added from the record, so it may be omitted.
+  area, conditions become worse than forecast, or the aircraft, crew or flare load
+  differs from the plan. An abort criterion is a change from the plan, never the
+  current forecast: do not repeat a hazard or a reading as an abort criterion. The
+  launch-by limit is added from the record: leave it out.
 Short operational sentences, no greetings, no markdown.
 """ % FIGURES_RULE
 
@@ -97,6 +97,9 @@ Rules:
 - Three short paragraphs, 120 to 220 words in total, plain English, past tense, factual:
   flight: the client, target area, date, aircraft, crew, takeoff and landing, flight time.
   conditions: the cloud conditions that led to the flight, from conditions_at_alert.
+  If conditions_at_alert is null, the flight was planned without a cloud alert: say so
+  in one sentence and say whether the readiness checks passed before launch, without
+  counting them. Do not describe weather the input does not give.
   results: the number of flares fired, the seeding material released, and rainfall.
   You may name the flare batches (flares.batches) the flares came from.
 - If observed_rainfall_mm is null, say that observed rainfall has not been recorded yet.
@@ -110,6 +113,24 @@ Rules:
 
 class TextRejected(Exception):
     """The model's text cannot be used."""
+
+
+# A line that restates the launch-by limit itself ("the launch-by time passes").
+LAUNCH_BY_PASSES = re.compile(
+    r"launch[- ]by(?: time| limit)?\s+(?:has\s+|is\s+)?(?:pass|passes|passed|reached|exceeded|expires|expired)",
+    re.IGNORECASE,
+)
+
+
+def _tidy(value):
+    """Whole floats as integers, so the model writes 98 %, not 98.0 %."""
+    if isinstance(value, float) and value.is_integer():
+        return int(value)
+    if isinstance(value, dict):
+        return {k: _tidy(v) for k, v in value.items()}
+    if isinstance(value, list):
+        return [_tidy(v) for v in value]
+    return value
 
 
 def _utc(moment):
@@ -202,17 +223,7 @@ class SeedingMissionWriter(models.AbstractModel):
             'wind_scores_nothing_from_kmh': WIND_LIMIT,
             'window_start_utc': _utc(alert.window_start),
             'window_end_utc': _utc(alert.window_end),
-            'cloud_cover_low_pct': snap.cloud_cover_low,
-            'cloud_cover_mid_pct': snap.cloud_cover_mid,
-            'cloud_cover_high_pct': snap.cloud_cover_high,
-            'cape_j_per_kg': snap.cape,
-            'lifted_index': snap.lifted_index,
-            'relative_humidity_pct': snap.relative_humidity,
-            'precipitation_probability_pct': snap.precipitation_probability,
-            'freezing_level_m': snap.freezing_level,
-            'wind_speed_kmh': snap.wind_speed,
-            'wind_gusts_kmh': snap.wind_gusts,
-            'wind_direction_deg': snap.wind_direction,
+            **snap._ai_readings(),
         }
 
     @api.model
@@ -259,7 +270,7 @@ class SeedingMissionWriter(models.AbstractModel):
     def _briefing_input(self, mission):
         mission = mission.sudo()
         grams = mission.flare_product_id.grams_per_flare
-        return {
+        return _tidy({
             'mission': mission.name,
             'client': mission.partner_id.name or None,
             'target_area': self._area(mission),
@@ -269,7 +280,7 @@ class SeedingMissionWriter(models.AbstractModel):
             'aircraft': self._aircraft(mission),
             'crew': self._crew(mission),
             'load': {
-                'flare_product': mission.flare_product_id.display_name or None,
+                'flare_product': mission.flare_product_id.name or None,
                 'flares_planned': mission.flares_planned,
                 'grams_per_flare': grams,
                 'material_planned_g': mission.flares_planned * grams,
@@ -279,13 +290,13 @@ class SeedingMissionWriter(models.AbstractModel):
                 line.lstrip('• ').strip() for line in (mission.plan_risks or '').splitlines() if line.strip()
             ],
             'readiness': self._readiness(mission),
-        }
+        })
 
     @api.model
     def _summary_input(self, mission):
         mission = mission.sudo()
         minutes = int(round(mission.flight_hours * 60))
-        return {
+        return _tidy({
             'mission': mission.name,
             'client': mission.partner_id.name or None,
             'contract': mission.contract_id.name or None,
@@ -300,7 +311,7 @@ class SeedingMissionWriter(models.AbstractModel):
             'aircraft': self._aircraft(mission),
             'crew': self._crew(mission),
             'flares': {
-                'product': mission.flare_product_id.display_name or None,
+                'product': mission.flare_product_id.name or None,
                 'loaded': mission.flares_planned,
                 'fired': mission.flares_fired,
                 'grams_per_flare': mission.flare_product_id.grams_per_flare,
@@ -319,7 +330,7 @@ class SeedingMissionWriter(models.AbstractModel):
                 'hours_after_landing': RAINFALL_HOURS_AFTER_LANDING,
                 'source': mission.rainfall_source,
             } if mission.rainfall_recorded_at else None,
-        }
+        })
 
     # Validation -----------------------------------------------------------
 
@@ -393,7 +404,8 @@ class SeedingMissionWriter(models.AbstractModel):
             return criteria
         clock = launch_by[-5:]  # HH:MM
         return [_("Do not take off after %s UTC.", launch_by)] + [
-            line for line in criteria if clock not in line
+            line for line in criteria
+            if clock not in line and not LAUNCH_BY_PASSES.search(line)
         ]
 
     # Templates ------------------------------------------------------------
@@ -457,7 +469,7 @@ class SeedingMissionWriter(models.AbstractModel):
             "Load %(flares)s x %(product)s, %(grams)s g each, %(total)s g of seeding material.",
             aircraft=plane.name, type=dict(plane._fields['aircraft_type'].selection).get(plane.aircraft_type, _("Crewed")),
             tail=plane.tail_number or _("not recorded"), base=mission.base_id.name, rack=plane.rack_capacity,
-            flares=mission.flares_planned, product=mission.flare_product_id.display_name,
+            flares=mission.flares_planned, product=mission.flare_product_id.name,
             grams=_num(grams), total=_num(mission.flares_planned * grams),
         )
         hazards = [line.lstrip('• ').strip() for line in (mission.plan_risks or '').splitlines() if line.strip()]
@@ -494,7 +506,7 @@ class SeedingMissionWriter(models.AbstractModel):
             "%(fired)s of the %(loaded)s %(product)s flares loaded were fired, releasing "
             "%(grams)s g (%(kg)s kg) of seeding material.",
             fired=mission.flares_fired, loaded=mission.flares_planned,
-            product=mission.flare_product_id.display_name, grams=_num(mission.material_released_g),
+            product=mission.flare_product_id.name, grams=_num(mission.material_released_g),
             kg=_num(mission.material_released_g / 1000.0),
         ))
         if alert:
@@ -577,6 +589,23 @@ class SeedingMissionWriter(models.AbstractModel):
             body = _("Crew briefing written from the mission record. %s", mission.briefing_fallback_reason)
         mission.message_post(body=body)
         return text is not None
+
+    @api.model
+    def write_briefing_from_record(self, mission):
+        """Write the crew briefing from the mission record only, with no AI
+        call (used for missions recorded in bulk). It awaits review like any
+        other briefing."""
+        mission.ensure_one()
+        mission.write({
+            'briefing': self._briefing_template(mission),
+            'briefing_source': 'template',
+            'briefing_model': False,
+            'briefing_fallback_reason': False,
+            'briefing_drafted_at': fields.Datetime.now(),
+            'briefing_reviewed_by': False,
+            'briefing_reviewed_at': False,
+        })
+        mission.message_post(body=_("Crew briefing written from the mission record. It needs review before takeoff."))
 
     @api.model
     def write_summary_from_record(self, mission):

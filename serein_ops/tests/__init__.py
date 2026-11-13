@@ -7,3 +7,4 @@ from . import test_flares
 from . import test_billing
 from . import test_reporting
 from . import test_demo_world
+from . import test_polish

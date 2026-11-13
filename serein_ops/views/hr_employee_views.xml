@@ -11,6 +11,7 @@
                         <group>
                             <field name="is_pilot"/>
                             <field name="pilot_role" invisible="not is_pilot" required="is_pilot"/>
+                            <field name="home_base_id" invisible="not is_pilot"/>
                             <field name="pilot_licence_number" invisible="not is_pilot" required="is_pilot"/>
                             <field name="licence_expiry" invisible="not is_pilot" required="is_pilot"/>
                             <field name="medical_expiry" invisible="not is_pilot or pilot_role == 'drone_operator'"/>
@@ -32,15 +33,93 @@
         <field name="model">hr.employee</field>
         <field name="priority">50</field>
         <field name="arch" type="xml">
-            <list>
+            <list decoration-danger="flying_status == 'grounded'"
+                  decoration-warning="flying_status == 'expiring'">
                 <field name="name"/>
                 <field name="pilot_role"/>
+                <field name="home_base_id"/>
                 <field name="pilot_licence_number"/>
                 <field name="licence_expiry"/>
                 <field name="medical_expiry"/>
                 <field name="duty_hours_7d"/>
                 <field name="weekly_duty_limit"/>
+                <field name="flying_status" widget="badge"
+                       decoration-success="flying_status == 'ok'"
+                       decoration-warning="flying_status == 'expiring'"
+                       decoration-danger="flying_status == 'grounded'"/>
             </list>
+        </field>
+    </record>
+
+    <record id="hr_employee_view_form_pilot" model="ir.ui.view">
+        <field name="name">hr.employee.form.pilot</field>
+        <field name="model">hr.employee</field>
+        <field name="priority">50</field>
+        <field name="arch" type="xml">
+            <form string="Pilot or Drone Operator">
+                <sheet>
+                    <field name="company_id" invisible="1"/>
+                    <field name="active" invisible="1"/>
+                    <field name="is_pilot" invisible="1"/>
+                    <field name="pilot_currency_id" invisible="1"/>
+                    <div class="oe_button_box" name="button_box">
+                        <button name="action_view_seeding_missions" type="object" class="oe_stat_button"
+                                icon="fa-plane">
+                            <field name="seeding_mission_count" widget="statinfo" string="Missions"/>
+                        </button>
+                    </div>
+                    <widget name="web_ribbon" title="Archived" bg_color="text-bg-danger" invisible="active"/>
+                    <field name="image_1920" widget="image" class="oe_avatar"
+                           options="{'preview_image': 'avatar_128'}"/>
+                    <div class="oe_title">
+                        <label for="name" string="Name"/>
+                        <h1><field name="name" placeholder="e.g. Mara Okafor" required="1"/></h1>
+                    </div>
+                    <group>
+                        <group name="flying" string="Licence and Medical">
+                            <field name="pilot_role" required="1"/>
+                            <field name="home_base_id"/>
+                            <field name="pilot_licence_number" required="1"/>
+                            <field name="licence_expiry" required="1"/>
+                            <field name="medical_expiry" invisible="pilot_role == 'drone_operator'"/>
+                        </group>
+                        <group name="duty" string="Duty and Cost">
+                            <field name="flying_status" widget="badge"
+                                   decoration-success="flying_status == 'ok'"
+                                   decoration-warning="flying_status == 'expiring'"
+                                   decoration-danger="flying_status == 'grounded'"/>
+                            <field name="duty_hours_7d"/>
+                            <field name="weekly_duty_limit"/>
+                            <field name="pilot_hourly_cost"/>
+                        </group>
+                        <group name="contact" string="Contact">
+                            <field name="work_email" widget="email"/>
+                            <field name="mobile_phone" widget="phone"/>
+                        </group>
+                    </group>
+                </sheet>
+                <chatter/>
+            </form>
+        </field>
+    </record>
+
+    <record id="hr_employee_view_search_pilot" model="ir.ui.view">
+        <field name="name">hr.employee.search.pilot</field>
+        <field name="model">hr.employee</field>
+        <field name="priority">50</field>
+        <field name="arch" type="xml">
+            <search>
+                <field name="name"/>
+                <field name="home_base_id"/>
+                <filter name="pilots" string="Pilots" domain="[('pilot_role', '=', 'pilot')]"/>
+                <filter name="drone_operators" string="Drone Operators" domain="[('pilot_role', '=', 'drone_operator')]"/>
+                <separator/>
+                <filter name="archived" string="Archived" domain="[('active', '=', False)]"/>
+                <group>
+                    <filter name="group_base" string="Home Base" context="{'group_by': 'home_base_id'}"/>
+                    <filter name="group_role" string="Flying Role" context="{'group_by': 'pilot_role'}"/>
+                </group>
+            </search>
         </field>
     </record>
 
@@ -50,14 +129,16 @@
         <field name="view_mode">list,form</field>
         <field name="domain">[('is_pilot', '=', True)]</field>
         <field name="context">{'default_is_pilot': True, 'default_pilot_role': 'pilot'}</field>
+        <field name="search_view_id" ref="hr_employee_view_search_pilot"/>
         <field name="view_ids" eval="[
             (5, 0, 0),
             (0, 0, {'view_mode': 'list', 'view_id': ref('hr_employee_view_list_pilot')}),
-            (0, 0, {'view_mode': 'form', 'view_id': ref('hr.view_employee_form')}),
+            (0, 0, {'view_mode': 'form', 'view_id': ref('hr_employee_view_form_pilot')}),
         ]"/>
         <field name="help" type="html">
             <p class="o_view_nocontent_smiling_face">Add the first pilot or drone operator</p>
-            <p>Pilots are employees with the Flying tab filled in.</p>
+            <p>Pilots fly crewed aircraft and drone operators fly drones. Licence and medical expiry
+               and duty hours over the last 7 days are checked before every mission.</p>
         </field>
     </record>
 </odoo>

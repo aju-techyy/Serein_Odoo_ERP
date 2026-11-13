@@ -8,22 +8,27 @@
                 <div class="alert alert-warning" role="alert" invisible="not blocking_reason">
                     <field name="blocking_reason" nolabel="1" class="d-inline"/>
                 </div>
-                <p>Fills this database with a complete cloud seeding operator:</p>
+                <p>Fills this database with a regional cloud seeding operator and its last
+                    150 days of operations:</p>
                 <ul>
-                    <li>three clients in the United Arab Emirates, Malaysia, and Norway, with six
-                        target areas and an active contract each;</li>
-                    <li>two bases, three crewed aircraft and one drone (the King Air 350 is close
-                        to its service interval), and five pilots and operators (one with an
-                        expired medical);</li>
-                    <li>HF-1000 flares in five batches, a vendor, and a reorder rule per base;</li>
-                    <li>25 past missions, flown through the readiness checks, with their flare
-                        releases, client summaries to review, and the invoices of past months;</li>
-                    <li>six weather snapshots recorded from Open-Meteo, and observed rainfall for
-                        missions flown more than two weeks ago (fetched from the reanalysis
-                        archive while loading, if it can be reached).</li>
+                    <li>six clients in the United Arab Emirates, Saudi Arabia, Malaysia, Norway,
+                        Australia, and India, with 16 target areas; four seasons running and two
+                        finished;</li>
+                    <li>five bases, seven crewed aircraft and three drones (the King Air 350 is
+                        close to its service interval), and 14 pilots and drone operators;</li>
+                    <li>hygroscopic and glaciogenic flares, two vendors, a reorder rule per base
+                        and flare, and the purchases, batch receipts, and paid bills they led to;</li>
+                    <li>cloud alerts raised from the real past forecasts of every area (Open-Meteo's
+                        historical forecast archive), the missions flown against them through the
+                        readiness checks, and the alerts dismissed or left to expire;</li>
+                    <li>scheduled services, breakdowns, observed rainfall for missions flown more
+                        than two weeks ago, client summaries to review, and the invoices and
+                        payments of past months.</li>
                 </ul>
-                <p class="text-muted">The company is renamed Stratus Ridge Weather Services.
-                    Dates are set relative to today.</p>
+                <p class="text-muted">Loading fetches the weather history of every area and takes
+                    about two minutes. Without internet access, a smaller history is built from
+                    recorded snapshots, without cloud alerts. The company is renamed Stratus Ridge
+                    Weather Services. Dates are set relative to today.</p>
                 <footer>
                     <button name="action_load" type="object" string="Load" class="btn-primary"
                             invisible="blocking_reason"/>

@@ -156,11 +156,15 @@ class TestFlaresAndMaintenance(TransactionCase):
     def test_flares_menu_opens_the_product_form_with_stock_buttons(self):
         action = self.env.ref('serein_ops.product_template_action_flare')
         form = action.view_ids.filtered(lambda v: v.view_mode == 'form').view_id
-        self.assertEqual(form, self.env.ref('product.product_template_only_form_view'))
+        self.assertEqual(form, self.env.ref('serein_ops.product_template_view_form_flare'))
         arch = self.env['product.template'].get_views([(form.id, 'form')])['views']['form']['arch']
-        self.assertIn('action_open_quants', arch)  # On Hand
+        self.assertIn('action_open_quants', arch)  # On Hand by location
+        self.assertIn('action_view_stock_move_lines', arch)  # In/Out
+        self.assertIn('action_open_product_lot', arch)  # Batches
+        self.assertIn('action_view_orderpoints', arch)  # Reorder rules
         self.assertIn('action_view_po', arch)  # Purchased
-        self.assertIn('serein_flare', arch)  # Cloud Seeding tab
+        self.assertIn('seller_ids', arch)  # Vendors
+        self.assertIn('grams_per_flare', arch)
 
     def test_base_location_is_inside_warehouse_stock(self):
         warehouse = self.env['stock.warehouse'].search([('company_id', '=', self.env.company.id)], limit=1)
@@ -455,3 +459,57 @@ class TestFlaresAndMaintenance(TransactionCase):
         check = self._check(mission, 'duty_hours')
         self.assertEqual(check.result, 'fail')
         self.assertIn('6.0 duty hours', check.explanation)
+
+    # Status colours ----------------------------------------------------------
+
+    def test_aircraft_status_ok_due_soon_grounded(self):
+        self.king_air.service_interval_hours = 10
+        self.assertEqual(self.king_air.service_status, 'ok')
+        self._past_flight(9.0, timedelta(days=1))  # 90 % of the interval
+        self.assertEqual(self.king_air.service_status, 'due_soon')
+        self.assertTrue(self.king_air.is_airworthy)
+        self._past_flight(1.0, timedelta(hours=2))  # interval reached
+        self.assertEqual(self.king_air.service_status, 'grounded')
+
+    def test_aircraft_with_open_corrective_request_is_grounded(self):
+        self.env['maintenance.request'].create({
+            'name': 'Hydraulic leak', 'equipment_id': self.king_air.id, 'maintenance_type': 'corrective',
+        })
+        self.assertEqual(self.king_air.service_status, 'grounded')
+
+    def test_pilot_status_follows_expiries_and_duty(self):
+        today = fields.Date.context_today(self.pilot)
+        self.assertEqual(self.pilot.flying_status, 'ok')
+        self.pilot.medical_expiry = today + timedelta(days=20)
+        self.assertEqual(self.pilot.flying_status, 'expiring')
+        self.pilot.medical_expiry = today - timedelta(days=1)
+        self.assertEqual(self.pilot.flying_status, 'grounded')
+        # A drone operator needs no medical.
+        self.pilot.pilot_role = 'drone_operator'
+        self.assertEqual(self.pilot.flying_status, 'ok')
+        self.pilot.licence_expiry = today
+        self.assertEqual(self.pilot.flying_status, 'expiring', "valid until the end of the day")
+
+    def test_pilot_status_follows_duty_hours(self):
+        self.pilot.weekly_duty_limit = 10
+        self._past_flight(8.0, timedelta(days=1))
+        self.assertEqual(self.pilot.flying_status, 'expiring')
+        self._past_flight(2.0, timedelta(days=2))
+        self.assertEqual(self.pilot.flying_status, 'grounded')
+
+    def test_contract_budget_status(self):
+        self.contract.flight_hour_budget = 10
+        self.assertEqual(self.contract.budget_status, 'ok')
+        self._past_flight(8.0, timedelta(days=1))
+        self.assertEqual(self.contract.budget_status, 'low')
+        self._past_flight(2.0, timedelta(days=2))
+        self.assertEqual(self.contract.budget_status, 'used')
+
+    def test_contract_hours_count_a_new_mission_once(self):
+        # The contract's missions were read before the new mission was created
+        # with its contract filled in from the area.
+        self.assertEqual(self.contract.mission_count, 0)
+        self.assertEqual(self.contract.hours_used, 0)
+        self._past_flight(3.0, timedelta(days=1))
+        self.assertEqual(self.contract.hours_used, 3.0)
+        self.assertEqual(self.contract.mission_count, 1)

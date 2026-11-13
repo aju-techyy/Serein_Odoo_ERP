@@ -65,7 +65,8 @@
         <field name="model">maintenance.equipment</field>
         <field name="priority">50</field>
         <field name="arch" type="xml">
-            <list>
+            <list decoration-danger="service_status == 'grounded'"
+                  decoration-warning="service_status == 'due_soon'">
                 <field name="name"/>
                 <field name="tail_number"/>
                 <field name="aircraft_type"/>
@@ -74,7 +75,10 @@
                 <field name="hours_since_service"/>
                 <field name="service_interval_hours"/>
                 <field name="last_service_at" optional="hide"/>
-                <field name="is_airworthy"/>
+                <field name="service_status" widget="badge"
+                       decoration-success="service_status == 'ok'"
+                       decoration-warning="service_status == 'due_soon'"
+                       decoration-danger="service_status == 'grounded'"/>
             </list>
         </field>
     </record>
@@ -98,6 +102,69 @@
         </field>
     </record>
 
+    <record id="maintenance_equipment_view_form_aircraft" model="ir.ui.view">
+        <field name="name">maintenance.equipment.form.aircraft</field>
+        <field name="model">maintenance.equipment</field>
+        <field name="priority">50</field>
+        <field name="arch" type="xml">
+            <form string="Aircraft">
+                <sheet>
+                    <field name="company_id" invisible="1"/>
+                    <field name="active" invisible="1"/>
+                    <field name="is_aircraft" invisible="1"/>
+                    <field name="aircraft_currency_id" invisible="1"/>
+                    <div class="oe_button_box" name="button_box">
+                        <button name="%(maintenance.hr_equipment_request_action_from_equipment)d"
+                                type="action" class="oe_stat_button" icon="fa-wrench"
+                                context="{'search_default_active': True, 'default_company_id': company_id, 'default_maintenance_team_id': maintenance_team_id}">
+                            <field string="Maintenance" name="maintenance_open_count" widget="statinfo"/>
+                        </button>
+                        <button name="action_view_seeding_missions" type="object" class="oe_stat_button"
+                                icon="fa-plane">
+                            <field name="seeding_mission_count" widget="statinfo" string="Missions"/>
+                        </button>
+                    </div>
+                    <widget name="web_ribbon" title="Archived" bg_color="text-bg-danger" invisible="active"/>
+                    <div class="alert alert-warning" role="alert" invisible="not id or is_airworthy">
+                        Not airworthy: an open corrective or scheduled-service request, or the
+                        service interval reached. Missions with this aircraft fail the airworthiness check.
+                    </div>
+                    <div class="oe_title">
+                        <label for="name" string="Aircraft"/>
+                        <h1><field name="name" placeholder="e.g. King Air 350"/></h1>
+                    </div>
+                    <group>
+                        <group name="aircraft" string="Aircraft">
+                            <field name="aircraft_type" required="1"/>
+                            <field name="tail_number" required="1"/>
+                            <field name="home_base_id"/>
+                            <field name="rack_capacity"/>
+                            <field name="aircraft_hourly_cost"/>
+                        </group>
+                        <group name="service" string="Service">
+                            <field name="is_airworthy" invisible="1"/>
+                            <field name="service_status" widget="badge"
+                                   decoration-success="service_status == 'ok'"
+                                   decoration-warning="service_status == 'due_soon'"
+                                   decoration-danger="service_status == 'grounded'"/>
+                            <field name="hours_since_service"/>
+                            <field name="service_interval_hours"/>
+                            <field name="last_service_at"/>
+                            <field name="maintenance_team_id" context="{'default_company_id': company_id}"/>
+                            <field name="technician_user_id" domain="[('share', '=', False)]"/>
+                        </group>
+                    </group>
+                    <notebook>
+                        <page string="Notes" name="notes">
+                            <field name="note" placeholder="Equipment fitted, operating remarks..."/>
+                        </page>
+                    </notebook>
+                </sheet>
+                <chatter/>
+            </form>
+        </field>
+    </record>
+
     <record id="maintenance_equipment_action_aircraft" model="ir.actions.act_window">
         <field name="name">Aircraft</field>
         <field name="res_model">maintenance.equipment</field>
@@ -108,11 +175,12 @@
         <field name="view_ids" eval="[
             (5, 0, 0),
             (0, 0, {'view_mode': 'list', 'view_id': ref('maintenance_equipment_view_list_aircraft')}),
-            (0, 0, {'view_mode': 'form', 'view_id': ref('maintenance.hr_equipment_view_form')}),
+            (0, 0, {'view_mode': 'form', 'view_id': ref('maintenance_equipment_view_form_aircraft')}),
         ]"/>
         <field name="help" type="html">
             <p class="o_view_nocontent_smiling_face">Add the first aircraft</p>
-            <p>Crewed aircraft and drones are maintenance equipment with an Aircraft tab.</p>
+            <p>Crewed aircraft and drones that fly seeding missions. Each has a home base, a flare rack,
+               and a service interval. Maintenance requests and airworthiness are tracked here too.</p>
         </field>
     </record>
 </odoo>

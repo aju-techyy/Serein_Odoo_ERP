@@ -42,16 +42,20 @@ Every plan is verified against these readiness checks before anyone can fly it:
 
 Rules:
 - Use only aircraft, pilots and bases listed in the input, and give their ids.
+- Choose only an aircraft whose reaches_target_area is true: its base serves the area.
 - base_id must be the chosen aircraft's home base: flares are loaded there.
 - A crewed aircraft needs a pilot whose role is "pilot". A drone needs a pilot
   whose role is "drone_operator".
+- The pilot's home_base_id must be the aircraft's home base. A pilot whose
+  home_base_id is null may fly from any base.
 - flares_planned must be at least 1, fit the aircraft's rack capacity, and not
   exceed the flares on hand at the base.
 - launch_start and launch_end are takeoff times in UTC, formatted YYYY-MM-DD HH:MM.
   Both must lie inside the alert window, and launch_start must not be before now_utc.
 - Prefer the plan that releases the most seeding material while passing every check.
 - reasoning: three to five plain sentences for the operations team, referring to
-  the weather readings and to why these assets were chosen over the others.
+  the weather readings and to why these assets were chosen over the others. Name
+  aircraft, pilots and bases; never mention their ids.
 - risks: short phrases, one per real risk to the flight or the seeding. Describe each
   in proportion to the readings: wind and gusts up to """ + _WIND_CALM + """ km/h are light (the
   score gives full wind points), and wind scores nothing from """ + _WIND_LIMIT + """ km/h. A favourable
@@ -135,20 +139,7 @@ class SeedingMissionPlanner(models.AbstractModel):
                 'seedability_score': alert.score,
                 'score_breakdown': alert.score_breakdown,
                 'readings_for_utc': _fmt(snap.valid_for),
-                'readings': {
-                    'cloud_cover_low_pct': snap.cloud_cover_low,
-                    'cloud_cover_mid_pct': snap.cloud_cover_mid,
-                    'cloud_cover_high_pct': snap.cloud_cover_high,
-                    'cape_j_per_kg': snap.cape,
-                    'lifted_index': snap.lifted_index,
-                    'convective_inhibition_j_per_kg': snap.convective_inhibition,
-                    'relative_humidity_pct': snap.relative_humidity,
-                    'precipitation_probability_pct': snap.precipitation_probability,
-                    'freezing_level_m': snap.freezing_level,
-                    'wind_speed_kmh': snap.wind_speed,
-                    'wind_gusts_kmh': snap.wind_gusts,
-                    'wind_direction_deg': snap.wind_direction,
-                },
+                'readings': snap._ai_readings(),
             },
             'contract': {
                 'reference': contract.name,
@@ -177,11 +168,15 @@ class SeedingMissionPlanner(models.AbstractModel):
                 'airworthy': plane.is_airworthy,
                 'flying_mission': launched.filtered(lambda m: m.aircraft_id == plane)[:1].name or None,
                 'hourly_cost': plane.aircraft_hourly_cost,
+                'reaches_target_area': (
+                    not plane.home_base_id.area_ids or alert.area_id in plane.home_base_id.area_ids
+                ),
             } for plane in aircraft],
             'pilots': [{
                 'id': pilot.id,
                 'name': pilot.name,
                 'role': pilot.pilot_role or 'pilot',
+                'home_base_id': pilot.home_base_id.id or None,
                 'licence_expiry': str(pilot.licence_expiry) if pilot.licence_expiry else None,
                 'medical_expiry': (
                     str(pilot.medical_expiry) if pilot.medical_expiry else None

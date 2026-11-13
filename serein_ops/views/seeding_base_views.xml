@@ -41,12 +41,43 @@
                     <notebook>
                         <page string="Aircraft" name="aircraft">
                             <field name="aircraft_ids" readonly="1">
-                                <list>
+                                <list decoration-danger="service_status == 'grounded'"
+                                      decoration-warning="service_status == 'due_soon'">
                                     <field name="name"/>
                                     <field name="tail_number"/>
                                     <field name="aircraft_type"/>
                                     <field name="rack_capacity"/>
-                                    <field name="is_airworthy"/>
+                                    <field name="hours_since_service"/>
+                                    <field name="service_status" widget="badge"
+                                           decoration-success="service_status == 'ok'"
+                                           decoration-warning="service_status == 'due_soon'"
+                                           decoration-danger="service_status == 'grounded'"/>
+                                </list>
+                            </field>
+                        </page>
+                        <page string="Target Areas Served" name="areas">
+                            <field name="area_ids">
+                                <list>
+                                    <field name="name"/>
+                                    <field name="partner_id"/>
+                                    <field name="country_id"/>
+                                    <field name="radius_km"/>
+                                </list>
+                            </field>
+                        </page>
+                        <page string="Crew" name="crew" groups="hr.group_hr_user">
+                            <field name="crew_ids" readonly="1">
+                                <list decoration-danger="flying_status == 'grounded'"
+                                      decoration-warning="flying_status == 'expiring'">
+                                    <field name="name"/>
+                                    <field name="pilot_role"/>
+                                    <field name="licence_expiry"/>
+                                    <field name="medical_expiry"/>
+                                    <field name="duty_hours_7d"/>
+                                    <field name="flying_status" widget="badge"
+                                           decoration-success="flying_status == 'ok'"
+                                           decoration-warning="flying_status == 'expiring'"
+                                           decoration-danger="flying_status == 'grounded'"/>
                                 </list>
                             </field>
                         </page>

@@ -20,6 +20,12 @@ ARCHIVE_MODEL = 'era5'
 ARCHIVE_TIMEOUT = 20  # seconds
 RAINFALL_SOURCE = 'ERA5 reanalysis (Open-Meteo historical weather API)'
 
+# Past forecasts: Open-Meteo's historical forecast API returns the forecasts
+# that were issued for past hours, with the same hourly variables as the live
+# feed. Used to fill in the weather history of target areas.
+HISTORY_URL = 'https://historical-forecast-api.open-meteo.com/v1/forecast'
+HISTORY_TIMEOUT = 30  # seconds
+
 # Hourly variables requested from Open-Meteo, mapped to snapshot fields.
 HOURLY_FIELDS = {
     'cloud_cover': 'cloud_cover',
@@ -44,7 +50,7 @@ HOURLY_FIELDS = {
 class SeedingWeatherService(models.AbstractModel):
     """Fetches live conditions from Open-Meteo and saves them as snapshots.
 
-    Only `_request` talks to the network, so tests mock that one method."""
+    Only `_request` talks to the network."""
     _name = 'seeding.weather.service'
     _description = 'Serein Weather Service (Open-Meteo)'
 
@@ -111,6 +117,44 @@ class SeedingWeatherService(models.AbstractModel):
         })
         return self.env['seeding.weather.snapshot'].create(vals)
 
+    # Forecast archive ---------------------------------------------------------
+
+    @api.model
+    def _request_history(self, latitude, longitude, start_date, end_date):
+        """Return the forecast archive's decoded JSON: the live feed's hourly
+        variables for one point, for whole UTC days from start_date to end_date."""
+        params = {
+            'latitude': latitude,
+            'longitude': longitude,
+            'start_date': start_date.isoformat(),
+            'end_date': end_date.isoformat(),
+            'hourly': ','.join(HOURLY_FIELDS),
+            'timezone': 'GMT',
+        }
+        response = requests.get(HISTORY_URL, params=params, timeout=HISTORY_TIMEOUT)
+        response.raise_for_status()
+        return response.json()
+
+    @api.model
+    def fetch_history(self, area, start_date, end_date):
+        """Past forecasts for one area. Raises UserError if the archive cannot
+        be reached or read."""
+        area.ensure_one()
+        try:
+            data = self._request_history(area.latitude, area.longitude, start_date, end_date)
+        except requests.exceptions.RequestException as error:
+            raise UserError(_(
+                "Could not reach the forecast archive for %(area)s: %(error)s",
+                area=area.name, error=error,
+            )) from error
+        except ValueError as error:
+            raise UserError(_(
+                "The forecast archive sent an unreadable answer for %(area)s.", area=area.name,
+            )) from error
+        if not (data.get('hourly') or {}).get('time'):
+            raise UserError(_("The forecast archive sent no hours for %s.", area.name))
+        return data
+
     # Observed rainfall --------------------------------------------------------
 
     @api.model
@@ -173,6 +217,19 @@ class SeedingWeatherService(models.AbstractModel):
             total += value
             moment += timedelta(hours=1)
         return round(total, 1)
+
+
+def hourly_slice(data, start, hours):
+    """The part of an hourly Open-Meteo response from `start` (naive UTC) for
+    `hours` hours, in the same shape as the response."""
+    hourly = (data or {}).get('hourly') or {}
+    times = hourly.get('time') or []
+    key = start.strftime('%Y-%m-%dT%H:%M')
+    first = times.index(key) if key in times else len(times)
+    last = first + hours
+    sliced = dict(data)
+    sliced['hourly'] = {name: values[first:last] for name, values in hourly.items()}
+    return sliced
 
 
 def hourly_rows(raw_response, start):

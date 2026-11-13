@@ -1,19 +1,32 @@
 from odoo import _, api, fields, models
 
-# Missions whose flight hours count against the aircraft and the crew.
-FLOWN_STATES = ('completed', 'billed')
+from .seeding_mission import FLOWN_STATES
+
+# An airworthy aircraft is "due soon" once it has flown this share of its
+# service interval.
+SERVICE_DUE_SOON_SHARE = 0.9
 
 
 class MaintenanceEquipment(models.Model):
     _inherit = 'maintenance.equipment'
 
-    is_aircraft = fields.Boolean(string='Is Aircraft', tracking=True)
+    is_aircraft = fields.Boolean(
+        string='Is Aircraft', tracking=True,
+        help="Flies seeding missions. Aircraft appear under Serein > Fleet > Aircraft.",
+    )
     aircraft_type = fields.Selection(
         [('crewed', 'Crewed aircraft'), ('drone', 'Drone')],
         string='Aircraft Type', tracking=True,
+        help="Crewed aircraft are flown by pilots, drones by drone operators.",
     )
-    tail_number = fields.Char(tracking=True, copy=False)
-    home_base_id = fields.Many2one('seeding.base', string='Home Base', tracking=True)
+    tail_number = fields.Char(
+        tracking=True, copy=False,
+        help="Registration marking of the aircraft. Must be unique.",
+    )
+    home_base_id = fields.Many2one(
+        'seeding.base', string='Home Base', tracking=True,
+        help="Base the aircraft flies from. Its flares come from this base's stock.",
+    )
     rack_capacity = fields.Integer(
         string='Flare Rack Capacity', tracking=True,
         help="Most flares the aircraft can carry on one mission.",
@@ -38,11 +51,18 @@ class MaintenanceEquipment(models.Model):
         help="No open corrective or scheduled-service request, and hours since "
              "service below the service interval.",
     )
+    service_status = fields.Selection(
+        [('ok', 'Airworthy'), ('due_soon', 'Service Due Soon'), ('grounded', 'Grounded')],
+        string='Status', compute='_compute_service_status',
+        help="Grounded: not airworthy. Service Due Soon: airworthy, with 90 % or more of "
+             "the service interval flown.",
+    )
     aircraft_currency_id = fields.Many2one(
         'res.currency', compute='_compute_aircraft_currency_id',
     )
     aircraft_hourly_cost = fields.Monetary(
         string='Hourly Cost', currency_field='aircraft_currency_id', tracking=True,
+        help="Operating cost of one flight hour. Used for mission cost.",
     )
 
     _tail_number_uniq = models.Constraint(
@@ -117,6 +137,16 @@ class MaintenanceEquipment(models.Model):
                 and equipment.hours_since_service < equipment.service_interval_hours
             )
 
+    @api.depends('is_airworthy', 'hours_since_service', 'service_interval_hours')
+    def _compute_service_status(self):
+        for equipment in self:
+            if not equipment.is_airworthy:
+                equipment.service_status = 'grounded'
+            elif equipment.hours_since_service >= SERVICE_DUE_SOON_SHARE * equipment.service_interval_hours:
+                equipment.service_status = 'due_soon'
+            else:
+                equipment.service_status = 'ok'
+
     def _open_requests(self):
         self.ensure_one()
         return self.maintenance_ids.filtered(lambda r: not r.stage_id.done and not r.archive)
@@ -163,12 +193,7 @@ class MaintenanceEquipment(models.Model):
 
     def action_view_seeding_missions(self):
         self.ensure_one()
-        action = self.env['ir.actions.act_window']._for_xml_id('serein_ops.seeding_mission_action')
-        action['domain'] = [('aircraft_id', '=', self.id)]
-        action['context'] = {'search_default_done': 1}
-        action['view_mode'] = 'list,form'
-        action['views'] = [(False, 'list'), (False, 'form')]
-        return action
+        return self.env['seeding.mission']._open_missions([('aircraft_id', '=', self.id)], history=True)
 
     @api.onchange('aircraft_type')
     def _onchange_aircraft_type(self):

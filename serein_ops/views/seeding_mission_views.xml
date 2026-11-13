@@ -4,7 +4,8 @@
         <field name="name">seeding.mission.list</field>
         <field name="model">seeding.mission</field>
         <field name="arch" type="xml">
-            <list decoration-muted="state == 'cancelled'">
+            <list decoration-muted="state == 'cancelled'"
+                  decoration-danger="state == 'proposed' and readiness_state == 'fail'">
                 <field name="name"/>
                 <field name="planned_takeoff"/>
                 <field name="partner_id" optional="show"/>
@@ -13,9 +14,12 @@
                 <field name="pilot_id"/>
                 <field name="flares_planned" optional="show"/>
                 <field name="flight_hours" optional="hide" sum="Total"/>
-                <field name="planned_by" optional="hide"/>
+                <field name="planned_by" widget="badge" optional="hide"
+                       decoration-info="planned_by == 'ai'"
+                       decoration-warning="planned_by == 'rules'"/>
                 <field name="material_released_g" optional="hide" sum="Total"/>
-                <field name="observed_rainfall_mm" optional="hide"/>
+                <field name="observed_rainfall_mm" optional="hide"
+                       decoration-info="observed_rainfall_mm &gt; 0"/>
                 <field name="currency_id" column_invisible="1"/>
                 <field name="mission_cost" optional="hide" sum="Total" groups="serein_ops.group_serein_manager"/>
                 <field name="summary_state" optional="hide" widget="badge"
@@ -48,7 +52,9 @@
                         <span t-if="record.pilot_id.raw_value"><field name="pilot_id"/></span>
                         <field name="planned_takeoff"/>
                         <footer>
-                            <field name="planned_by" widget="badge"/>
+                            <field name="planned_by" widget="badge"
+                                   decoration-info="planned_by == 'ai'"
+                                   decoration-warning="planned_by == 'rules'"/>
                             <div class="ms-auto">
                                 <field name="readiness_state" widget="badge"
                                        decoration-success="readiness_state == 'pass'"

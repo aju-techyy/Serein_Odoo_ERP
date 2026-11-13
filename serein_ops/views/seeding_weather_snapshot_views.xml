@@ -4,9 +4,10 @@
         <field name="name">seeding.weather.snapshot.list</field>
         <field name="model">seeding.weather.snapshot</field>
         <field name="arch" type="xml">
-            <list create="0" edit="0" decoration-success="score &gt;= 60" decoration-muted="score &lt; 30">
+            <list create="0" edit="0" decoration-success="score_band == 'seedable'"
+                  decoration-muted="score_band == 'poor'">
                 <header>
-                    <button name="action_fetch_all_areas" type="object" string="Fetch all areas now"
+                    <button name="action_fetch_all_areas" type="object" string="Fetch All Areas Now"
                             class="btn-primary" display="always"/>
                 </header>
                 <field name="valid_for"/>
@@ -20,9 +21,13 @@
                 <field name="precipitation" optional="hide"/>
                 <field name="wind_speed" optional="show"/>
                 <field name="wind_gusts" optional="hide"/>
-                <field name="score"/>
+                <field name="score" class="fw-bold"/>
+                <field name="score_band" widget="badge" optional="show"
+                       decoration-success="score_band == 'seedable'" decoration-warning="score_band == 'marginal'"/>
                 <field name="alert_count" string="Alerts" optional="show"/>
                 <field name="fetched_at" optional="hide"/>
+                <field name="data_source" widget="badge" optional="hide"
+                       decoration-info="data_source == 'archive'"/>
             </list>
         </field>
     </record>
@@ -33,7 +38,7 @@
         <field name="arch" type="xml">
             <form create="0" edit="0">
                 <header>
-                    <button name="action_replay" type="object" string="Replay recorded conditions"
+                    <button name="action_replay" type="object" string="Replay Recorded Conditions"
                             class="btn-primary"
                             help="Raise an alert now from these saved real readings. The alert is labelled as a replay with the date they were recorded."/>
                 </header>
@@ -52,6 +57,7 @@
                             <field name="partner_id"/>
                             <field name="valid_for"/>
                             <field name="fetched_at"/>
+                            <field name="data_source"/>
                         </group>
                         <group string="Seedability Score">
                             <field name="score" widget="progressbar"/>
@@ -107,7 +113,12 @@
             <search>
                 <field name="area_id"/>
                 <field name="partner_id"/>
-                <filter name="seedable" string="Score 60 or more" domain="[('score', '&gt;=', 60)]"/>
+                <filter name="seedable" string="Seedable" domain="[('score_band', '=', 'seedable')]"/>
+                <filter name="marginal" string="Marginal" domain="[('score_band', '=', 'marginal')]"/>
+                <separator/>
+                <filter name="live_forecast" string="Live Forecast" domain="[('data_source', '=', 'forecast')]"/>
+                <filter name="forecast_archive" string="Forecast Archive" domain="[('data_source', '=', 'archive')]"/>
+                <separator/>
                 <filter name="today" string="Fetched Today"
                         domain="[('fetched_at', '&gt;=', context_today().strftime('%Y-%m-%d'))]"/>
                 <group>
@@ -125,7 +136,7 @@
         <field name="view_mode">list,form</field>
         <field name="help" type="html">
             <p class="o_view_nocontent_empty_folder">No weather fetched yet</p>
-            <p>Click "Fetch all areas now", or "Fetch now" on a target area. Every fetch is saved here,
+            <p>Click "Fetch All Areas Now", or "Fetch Now" on a target area. Every fetch is saved here,
                so recorded conditions can be replayed later.</p>
         </field>
     </record>

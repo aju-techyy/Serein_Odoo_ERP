@@ -1,6 +1,6 @@
 {
     'name': 'Serein',
-    'version': '19.0.1.7.0',
+    'version': '19.0.1.10.0',
     'summary': 'Cloud seeding operations: weather monitoring, mission planning, fleet, and billing',
     'description': """
 Plans and tracks cloud seeding missions for client contracts: live weather

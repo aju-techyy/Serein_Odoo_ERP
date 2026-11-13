@@ -4,7 +4,8 @@
         <field name="name">seeding.cloud.alert.list</field>
         <field name="model">seeding.cloud.alert</field>
         <field name="arch" type="xml">
-            <list decoration-muted="state in ('dismissed', 'expired')" decoration-info="source == 'replayed'">
+            <list decoration-muted="state in ('dismissed', 'expired')" decoration-info="source == 'replayed'"
+                  decoration-bf="state == 'new'">
                 <field name="name"/>
                 <field name="area_id"/>
                 <field name="partner_id" optional="show"/>
@@ -13,7 +14,8 @@
                 <field name="expires_at" optional="hide"/>
                 <field name="score" widget="progressbar"/>
                 <field name="source" widget="badge"
-                       decoration-success="source == 'live'" decoration-info="source == 'replayed'"/>
+                       decoration-success="source == 'live'" decoration-info="source == 'replayed'"
+                       decoration-muted="source == 'archive'"/>
                 <field name="state" widget="badge"
                        decoration-success="state == 'new'" decoration-info="state == 'planned'"
                        decoration-muted="state in ('dismissed', 'expired')"/>
@@ -110,6 +112,7 @@
                 <filter name="closed" string="Dismissed or Expired" domain="[('state', 'in', ('dismissed', 'expired'))]"/>
                 <separator/>
                 <filter name="live" string="Live" domain="[('source', '=', 'live')]"/>
+                <filter name="archive" string="Forecast Archive" domain="[('source', '=', 'archive')]"/>
                 <filter name="replayed" string="Replayed" domain="[('source', '=', 'replayed')]"/>
                 <filter name="manual" string="Manual" domain="[('source', '=', 'manual')]"/>
                 <group>
