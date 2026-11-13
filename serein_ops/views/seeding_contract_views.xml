@@ -28,6 +28,10 @@
                 <header>
                     <button name="action_activate" string="Activate" type="object"
                             class="oe_highlight" invisible="state != 'draft'"/>
+                    <button name="action_create_invoice" string="Create Invoice" type="object"
+                            class="oe_highlight" invisible="state not in ('active', 'closed')"
+                            groups="serein_ops.group_serein_manager"
+                            help="Invoice standby days and the flight hours of completed missions for a period."/>
                     <button name="action_close" string="Close" type="object"
                             invisible="state != 'active'"/>
                     <button name="action_cancel" string="Cancel" type="object"
@@ -40,6 +44,11 @@
                     <div class="oe_button_box" name="button_box">
                         <button name="action_view_missions" type="object" class="oe_stat_button" icon="fa-plane">
                             <field name="mission_count" widget="statinfo" string="Missions"/>
+                        </button>
+                        <button name="action_view_invoices" type="object" class="oe_stat_button"
+                                icon="fa-pencil-square-o" invisible="not invoice_count"
+                                groups="account.group_account_invoice">
+                            <field name="invoice_count" widget="statinfo" string="Invoices"/>
                         </button>
                     </div>
                     <div class="oe_title">

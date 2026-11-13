@@ -15,6 +15,8 @@
                 <field name="flight_hours" optional="hide" sum="Total"/>
                 <field name="planned_by" optional="hide"/>
                 <field name="material_released_g" optional="hide" sum="Total"/>
+                <field name="currency_id" column_invisible="1"/>
+                <field name="mission_cost" optional="hide" sum="Total" groups="serein_ops.group_serein_manager"/>
                 <field name="summary_state" optional="hide" widget="badge"
                        decoration-warning="summary_state == 'to_review'"
                        decoration-success="summary_state == 'approved'"/>
@@ -102,6 +104,13 @@
                         <button name="action_view_ai_logs" type="object" class="oe_stat_button"
                                 icon="fa-commenting-o" invisible="not ai_log_count">
                             <field name="ai_log_count" widget="statinfo" string="AI Calls"/>
+                        </button>
+                        <button name="action_view_invoice" type="object" class="oe_stat_button"
+                                icon="fa-pencil-square-o" invisible="not invoice_id"
+                                groups="account.group_account_invoice">
+                            <div class="o_stat_info">
+                                <span class="o_stat_text">Invoice</span>
+                            </div>
                         </button>
                         <button name="action_view_flare_transfer" type="object" class="oe_stat_button"
                                 icon="fa-truck" invisible="not picking_id"
@@ -209,6 +218,18 @@
                                     <field name="rainfall_recorded_at" invisible="not rainfall_recorded_at"/>
                                 </group>
                             </group>
+                            <group>
+                                <group string="Cost" groups="serein_ops.group_serein_manager">
+                                    <field name="currency_id" invisible="1"/>
+                                    <field name="flare_cost"/>
+                                    <field name="aircraft_cost"/>
+                                    <field name="crew_cost"/>
+                                    <field name="mission_cost" class="fw-bold"/>
+                                </group>
+                                <group string="Billing" groups="account.group_account_invoice">
+                                    <field name="invoice_id"/>
+                                </group>
+                            </group>
                         </page>
                         <page string="Crew Briefing" name="briefing" invisible="not briefing">
                             <div class="alert alert-warning" role="alert"
@@ -273,6 +294,7 @@
                         domain="[('state', 'in', ('proposed', 'ready', 'launched'))]"/>
                 <filter name="done" string="Completed or Billed"
                         domain="[('state', 'in', ('completed', 'billed'))]"/>
+                <filter name="to_invoice" string="To Invoice" domain="[('state', '=', 'completed')]"/>
                 <separator/>
                 <filter name="checks_failed" string="Checks Failed" domain="[('readiness_state', '=', 'fail')]"/>
                 <filter name="summary_to_review" string="Summary to Review" domain="[('summary_state', '=', 'to_review')]"/>

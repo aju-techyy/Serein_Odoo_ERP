@@ -1,0 +1,54 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <record id="seeding_contract_invoice_wizard_view_form" model="ir.ui.view">
+        <field name="name">seeding.contract.invoice.wizard.form</field>
+        <field name="model">seeding.contract.invoice.wizard</field>
+        <field name="arch" type="xml">
+            <form string="Create Invoice">
+                <p class="text-muted">
+                    Bills the season days in the period that no earlier invoice covers, at the standby
+                    fee, and the flight hours of completed missions that landed in the period and are
+                    not invoiced yet. The invoice is created as a draft for review.
+                </p>
+                <group>
+                    <group>
+                        <field name="contract_id"/>
+                        <field name="partner_id"/>
+                        <field name="currency_id" invisible="1"/>
+                    </group>
+                    <group>
+                        <field name="date_from"/>
+                        <field name="date_to"/>
+                    </group>
+                </group>
+                <group string="To Invoice">
+                    <group>
+                        <field name="standby_days"/>
+                        <field name="standby_fee"/>
+                        <field name="standby_amount"/>
+                    </group>
+                    <group>
+                        <field name="flight_hours" widget="float_time"/>
+                        <field name="flight_hour_rate"/>
+                        <field name="flight_amount"/>
+                        <field name="amount_untaxed" class="fw-bold"/>
+                    </group>
+                </group>
+                <field name="mission_ids" nolabel="1" readonly="1">
+                    <list create="0" delete="0" no_open="1">
+                        <field name="name"/>
+                        <field name="landing_at"/>
+                        <field name="area_id"/>
+                        <field name="aircraft_id"/>
+                        <field name="flight_hours" widget="float_time" sum="Total"/>
+                    </list>
+                </field>
+                <footer>
+                    <button name="action_create_invoice" type="object" string="Create Invoice"
+                            class="btn-primary" data-hotkey="q"/>
+                    <button string="Discard" class="btn-secondary" special="cancel" data-hotkey="x"/>
+                </footer>
+            </form>
+        </field>
+    </record>
+</odoo>

@@ -145,6 +145,30 @@ class SeedingMission(models.Model):
     rainfall_recorded_at = fields.Datetime(string='Rainfall Recorded At', readonly=True, copy=False)
     note = fields.Html()
 
+    # Cost and billing -------------------------------------------------------
+    currency_id = fields.Many2one(related='company_id.currency_id')
+    flare_cost = fields.Monetary(
+        string='Flare Cost', compute='_compute_costs', store=True,
+        help="Flares fired x the flare's cost.",
+    )
+    aircraft_cost = fields.Monetary(
+        string='Aircraft Cost', compute='_compute_costs', store=True,
+        help="Flight hours x the aircraft's hourly cost.",
+    )
+    crew_cost = fields.Monetary(
+        string='Crew Cost', compute='_compute_costs', store=True,
+        help="Flight hours x the pilot's flying hourly cost.",
+    )
+    mission_cost = fields.Monetary(
+        string='Mission Cost', compute='_compute_costs', store=True,
+        help="Flare, aircraft, and crew cost of the flight, at the costs in force when the "
+             "flight was recorded.",
+    )
+    invoice_id = fields.Many2one(
+        'account.move', string='Invoice', readonly=True, copy=False, index='btree_not_null',
+        help="The customer invoice that billed this mission's flight hours.",
+    )
+
     # Crew briefing (drafted when the mission becomes ready) ----------------
     briefing = fields.Text(string='Crew Briefing', copy=False)
     briefing_source = fields.Selection(
@@ -278,6 +302,19 @@ class SeedingMission(models.Model):
     def _compute_material_released(self):
         for mission in self:
             mission.material_released_g = mission.flares_fired * mission.flare_product_id.grams_per_flare
+
+    # Rates are read when the flight figures change, and are deliberately not
+    # dependencies: a later change of a rate does not rewrite past missions.
+    @api.depends('flight_hours', 'flares_fired', 'aircraft_id', 'pilot_id', 'flare_product_id')
+    def _compute_costs(self):
+        for mission in self:
+            sudo = mission.sudo()
+            flare = sudo.flare_product_id.with_company(mission.company_id)
+            currency = mission.company_id.currency_id
+            mission.flare_cost = currency.round(mission.flares_fired * flare.standard_price)
+            mission.aircraft_cost = currency.round(mission.flight_hours * sudo.aircraft_id.aircraft_hourly_cost)
+            mission.crew_cost = currency.round(mission.flight_hours * sudo.pilot_id.pilot_hourly_cost)
+            mission.mission_cost = mission.flare_cost + mission.aircraft_cost + mission.crew_cost
 
     @api.depends('picking_id.move_line_ids.lot_id', 'picking_id.move_line_ids.quantity')
     def _compute_flare_batches(self):
@@ -678,6 +715,33 @@ class SeedingMission(models.Model):
             if not mission.summary_reviewed_by:
                 raise UserError(_("Approve the client summary of %s before printing the report.", mission.name))
         return self.env.ref('serein_ops.action_report_seeding_mission').report_action(self)
+
+    def _release_from_invoice(self):
+        """Billed missions whose invoice line was deleted or whose invoice was
+        cancelled go back to completed, so a new invoice can bill them."""
+        lines = self.env['account.move.line'].sudo().search([
+            ('seeding_mission_id', 'in', self.ids), ('parent_state', '!=', 'cancel'),
+        ])
+        for mission in self.filtered(lambda m: m.state == 'billed'):
+            if mission in lines.seeding_mission_id:
+                continue
+            invoice = mission.invoice_id
+            mission.write({'state': 'completed', 'invoice_id': False})
+            mission.message_post(body=_(
+                "No longer invoiced (%s was cancelled or the line removed). The mission can be "
+                "invoiced again.", invoice.name or _("the invoice"),
+            ))
+
+    def action_view_invoice(self):
+        self.ensure_one()
+        return {
+            'type': 'ir.actions.act_window',
+            'res_model': 'account.move',
+            'res_id': self.invoice_id.id,
+            'view_mode': 'form',
+            'views': [(self.env.ref('account.view_move_form').id, 'form')],
+            'name': _("Invoice"),
+        }
 
     def action_view_flare_transfer(self):
         self.ensure_one()

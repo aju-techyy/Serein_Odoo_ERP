@@ -14,3 +14,4 @@ from . import maintenance_equipment
 from . import hr_employee
 from . import product_template
 from . import stock
+from . import account_move
