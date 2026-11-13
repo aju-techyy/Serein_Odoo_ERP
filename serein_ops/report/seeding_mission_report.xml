@@ -145,10 +145,19 @@
                 <p t-else="">This mission was planned without a cloud alert.</p>
 
                 <h4 class="mt-4">Observed Rainfall</h4>
-                <p t-if="o.rainfall_recorded_at">
-                    <t t-out="'%g' % o.observed_rainfall_mm"/> mm over the target area
-                    (recorded <t t-out="o._utc_text(o.rainfall_recorded_at)"/>).
-                </p>
+                <t t-if="o.rainfall_recorded_at">
+                    <p name="rainfall">
+                        <t t-out="'%g' % o.observed_rainfall_mm"/> mm over the target area from
+                        <t t-out="o._utc_text(o.rainfall_period_start)"/> to
+                        <t t-out="o._utc_text(o.rainfall_period_end)"/>
+                        (the takeoff hour to 24 hours after landing).
+                    </p>
+                    <p class="small text-muted">
+                        Source: <t t-out="o.rainfall_source"/>, recorded
+                        <t t-out="o._utc_text(o.rainfall_recorded_at)"/>.
+                        Rainfall data by Open-Meteo.com (CC BY 4.0).
+                    </p>
+                </t>
                 <p t-else="">Not recorded yet.</p>
 
                 <!-- Eleven rows fit on one page: keep the heading and the table together. -->

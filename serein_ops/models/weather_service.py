@@ -1,6 +1,6 @@
 import json
 import logging
-from datetime import datetime
+from datetime import datetime, timedelta
 
 import requests
 
@@ -11,6 +11,14 @@ _logger = logging.getLogger(__name__)
 
 OPEN_METEO_URL = 'https://api.open-meteo.com/v1/forecast'
 OPEN_METEO_TIMEOUT = 15  # seconds
+
+# Observed rainfall: Open-Meteo's historical weather API, pinned to the ERA5
+# reanalysis. Other archive models fill recent days (even later hours of
+# today) from forecasts, which are not observations. ERA5 is about 6 days behind.
+ARCHIVE_URL = 'https://archive-api.open-meteo.com/v1/archive'
+ARCHIVE_MODEL = 'era5'
+ARCHIVE_TIMEOUT = 20  # seconds
+RAINFALL_SOURCE = 'ERA5 reanalysis (Open-Meteo historical weather API)'
 
 # Hourly variables requested from Open-Meteo, mapped to snapshot fields.
 HOURLY_FIELDS = {
@@ -102,6 +110,69 @@ class SeedingWeatherService(models.AbstractModel):
             'raw_response': json.dumps(data),
         })
         return self.env['seeding.weather.snapshot'].create(vals)
+
+    # Observed rainfall --------------------------------------------------------
+
+    @api.model
+    def _request_archive(self, latitude, longitude, start_date, end_date):
+        """Return the archive's decoded JSON: hourly precipitation (mm, UTC)
+        for one point, for whole UTC days from start_date to end_date."""
+        params = {
+            'latitude': latitude,
+            'longitude': longitude,
+            'start_date': start_date.isoformat(),
+            'end_date': end_date.isoformat(),
+            'hourly': 'precipitation',
+            'models': ARCHIVE_MODEL,
+            'timezone': 'GMT',
+        }
+        response = requests.get(ARCHIVE_URL, params=params, timeout=ARCHIVE_TIMEOUT)
+        response.raise_for_status()
+        return response.json()
+
+    @api.model
+    def fetch_archive(self, area, start, end):
+        """Archive data covering the hours from `start` to `end` (naive UTC).
+        Raises UserError if the archive cannot be reached or read."""
+        area.ensure_one()
+        try:
+            return self._request_archive(area.latitude, area.longitude, start.date(), end.date())
+        except requests.exceptions.RequestException as error:
+            raise UserError(_(
+                "Could not reach the rainfall archive for %(area)s: %(error)s",
+                area=area.name, error=error,
+            )) from error
+        except ValueError as error:
+            raise UserError(_(
+                "The rainfall archive sent an unreadable answer for %(area)s.", area=area.name,
+            )) from error
+
+    @api.model
+    def rainfall_total(self, data, start, end):
+        """Sum the hourly precipitation (mm) of the hours starting at or after
+        `start` and before `end` (naive UTC), from an archive response.
+
+        Raises UserError if any of those hours is missing or has no value yet."""
+        if end <= start:
+            raise UserError(_("The rainfall period is empty."))
+        hourly = (data or {}).get('hourly') or {}
+        values = dict(zip(hourly.get('time') or [], hourly.get('precipitation') or []))
+        total = 0.0
+        moment = start
+        while moment < end:
+            value = values.get(moment.strftime('%Y-%m-%dT%H:%M'))
+            if value is None:
+                known = [stamp for stamp, amount in values.items() if amount is not None]
+                last = max(known) if known else None
+                raise UserError(_(
+                    "The reanalysis archive does not cover %(hour)s UTC yet%(last)s. It is usually "
+                    "about 6 days behind: fetch the rainfall again later.",
+                    hour=moment.strftime('%d %b %Y %H:%M'),
+                    last=_(" (it currently ends at %s UTC)", last.replace('T', ' ')) if last else '',
+                ))
+            total += value
+            moment += timedelta(hours=1)
+        return round(total, 1)
 
 
 def hourly_rows(raw_response, start):

@@ -30,8 +30,20 @@
     <menuitem id="menu_serein_flares" name="Flares" parent="menu_serein_fleet"
               action="product_template_action_flare" sequence="30"/>
 
+    <menuitem id="menu_serein_reporting" name="Reporting" parent="menu_serein_root" sequence="80"/>
+    <menuitem id="menu_serein_report_hours" name="Flight Hours by Client" parent="menu_serein_reporting"
+              action="seeding_report_hours_action" sequence="10"/>
+    <menuitem id="menu_serein_report_material" name="Material Released by Area" parent="menu_serein_reporting"
+              action="seeding_report_material_action" sequence="20"/>
+    <menuitem id="menu_serein_report_cost" name="Cost per Mission" parent="menu_serein_reporting"
+              action="seeding_report_cost_action" groups="group_serein_manager" sequence="30"/>
+    <menuitem id="menu_serein_report_planning" name="Missions by Planner" parent="menu_serein_reporting"
+              action="seeding_report_planning_action" sequence="40"/>
+
     <menuitem id="menu_serein_config" name="Configuration" parent="menu_serein_root"
               groups="group_serein_manager" sequence="90"/>
     <menuitem id="menu_serein_bases" name="Bases" parent="menu_serein_config"
               action="seeding_base_action" sequence="10"/>
+    <menuitem id="menu_serein_demo_world" name="Load Demo World" parent="menu_serein_config"
+              action="action_seeding_demo_world_load" sequence="90"/>
 </odoo>

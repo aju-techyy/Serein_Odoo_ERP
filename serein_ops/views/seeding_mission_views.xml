@@ -15,6 +15,7 @@
                 <field name="flight_hours" optional="hide" sum="Total"/>
                 <field name="planned_by" optional="hide"/>
                 <field name="material_released_g" optional="hide" sum="Total"/>
+                <field name="observed_rainfall_mm" optional="hide"/>
                 <field name="currency_id" column_invisible="1"/>
                 <field name="mission_cost" optional="hide" sum="Total" groups="serein_ops.group_serein_manager"/>
                 <field name="summary_state" optional="hide" widget="badge"
@@ -89,6 +90,9 @@
                     <button name="action_reopen_summary" type="object" string="Reopen Summary"
                             invisible="summary_state != 'approved'"
                             help="Take the summary off the report so it can be edited, then approve it again."/>
+                    <button name="action_fetch_rainfall" type="object" string="Fetch Observed Rainfall"
+                            invisible="state not in ('completed', 'billed')"
+                            help="Sum the observed rainfall over the target area from the takeoff hour to 24 hours after landing, from the ERA5 reanalysis archive (about 6 days behind)."/>
                     <button name="action_rerun_checks" type="object" string="Re-run Checks"
                             invisible="state not in ('proposed', 'ready')"/>
                     <button name="action_reset_to_proposed" type="object" string="Back to Proposed"
@@ -214,8 +218,24 @@
                                     <field name="flare_batches" invisible="not flare_batches"/>
                                     <field name="picking_id" invisible="not picking_id"
                                            groups="stock.group_stock_user"/>
+                                </group>
+                            </group>
+                            <group string="Observed Rainfall" name="rainfall">
+                                <group>
                                     <field name="observed_rainfall_mm" invisible="not rainfall_recorded_at"/>
-                                    <field name="rainfall_recorded_at" invisible="not rainfall_recorded_at"/>
+                                    <field name="rainfall_period_start" invisible="not rainfall_recorded_at"/>
+                                    <field name="rainfall_period_end" invisible="not rainfall_recorded_at"/>
+                                    <div colspan="2" class="text-muted" invisible="rainfall_recorded_at">
+                                        Not recorded yet. Use Fetch Observed Rainfall once the
+                                        reanalysis archive covers 24 hours after landing (about 6 days later).
+                                    </div>
+                                </group>
+                                <group invisible="not rainfall_recorded_at">
+                                    <field name="rainfall_source"/>
+                                    <field name="rainfall_recorded_at"/>
+                                    <div colspan="2" class="small text-muted">
+                                        Rainfall data by Open-Meteo.com (CC BY 4.0).
+                                    </div>
                                 </group>
                             </group>
                             <group>
@@ -298,6 +318,8 @@
                 <separator/>
                 <filter name="checks_failed" string="Checks Failed" domain="[('readiness_state', '=', 'fail')]"/>
                 <filter name="summary_to_review" string="Summary to Review" domain="[('summary_state', '=', 'to_review')]"/>
+                <filter name="rainfall_missing" string="Rainfall Not Recorded"
+                        domain="[('state', 'in', ('completed', 'billed')), ('rainfall_recorded_at', '=', False)]"/>
                 <separator/>
                 <filter name="planned_ai" string="Planned by AI" domain="[('planned_by', '=', 'ai')]"/>
                 <filter name="planned_rules" string="Planned by Rules" domain="[('planned_by', '=', 'rules')]"/>
@@ -307,6 +329,8 @@
                     <filter name="group_partner" string="Client" context="{'group_by': 'partner_id'}"/>
                     <filter name="group_area" string="Target Area" context="{'group_by': 'area_id'}"/>
                     <filter name="group_aircraft" string="Aircraft" context="{'group_by': 'aircraft_id'}"/>
+                    <filter name="group_planned_by" string="Planned By" context="{'group_by': 'planned_by'}"/>
+                    <filter name="group_landing" string="Landing Month" context="{'group_by': 'landing_at:month'}"/>
                 </group>
             </search>
         </field>
@@ -315,7 +339,7 @@
     <record id="seeding_mission_action" model="ir.actions.act_window">
         <field name="name">Missions</field>
         <field name="res_model">seeding.mission</field>
-        <field name="view_mode">kanban,list,form</field>
+        <field name="view_mode">kanban,list,form,graph,pivot</field>
         <field name="help" type="html">
             <p class="o_view_nocontent_smiling_face">Plan the first seeding mission</p>
             <p>A mission assigns an aircraft, a pilot, and a flare load to a cloud alert.

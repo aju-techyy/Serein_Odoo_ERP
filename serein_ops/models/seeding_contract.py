@@ -257,10 +257,12 @@ class SeedingContract(models.Model):
                 })
         return lines
 
-    def _create_invoice(self, date_from, date_to):
+    def _create_invoice(self, date_from, date_to, invoice_date=None):
         """Create a draft customer invoice for the period, or nothing if the
         period holds no unbilled standby days and no unbilled missions. The
-        missions on it move to billed."""
+        missions on it move to billed. `invoice_date` is set at creation, so
+        the due date follows it (Odoo sets the due date when the invoice is
+        created)."""
         self.ensure_one()
         self._check_invoice_period(date_from, date_to)
         lines = self._invoice_line_values(date_from, date_to)
@@ -279,6 +281,10 @@ class SeedingContract(models.Model):
             'seeding_contract_id': self.id,
             'seeding_period_start': date_from,
             'seeding_period_end': date_to,
+            'invoice_date': invoice_date or False,
+            # Without a payment term Odoo keeps this field as the due date
+            # (default today); with one, the term computes it.
+            'invoice_date_due': invoice_date or fields.Date.context_today(self),
             'invoice_line_ids': [Command.create(vals) for vals in lines],
         })
         missions = invoice.invoice_line_ids.seeding_mission_id

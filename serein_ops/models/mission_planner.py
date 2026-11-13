@@ -330,14 +330,27 @@ class SeedingMissionPlanner(models.AbstractModel):
         return best
 
     @api.model
-    def _rule_values(self, alert, aircraft, pilots, reason, origin=None):
-        vals, plane, pilot, failed = self._rule_plan(alert, aircraft, pilots, origin=origin)
-        summary = _(
+    def _rule_summary(self, plane, pilot, flares):
+        return _(
             "%(aircraft)s from %(base)s, flown by %(pilot)s, loading %(flares)s flares "
             "(rack %(rack)s).",
             aircraft=plane.name, base=plane.home_base_id.name, pilot=pilot.name,
-            flares=vals['flares_planned'], rack=plane.rack_capacity,
+            flares=flares, rack=plane.rack_capacity,
         )
+
+    @api.model
+    def _rule_reasoning(self, plane, pilot, flares):
+        """Reasoning of a rule-based plan whose assets pass every check."""
+        return _(
+            "Rule-based plan: the first aircraft and pilot that pass all eleven readiness "
+            "checks, with the fullest flare load the rack and base stock allow: %s",
+            self._rule_summary(plane, pilot, flares),
+        )
+
+    @api.model
+    def _rule_values(self, alert, aircraft, pilots, reason, origin=None):
+        vals, plane, pilot, failed = self._rule_plan(alert, aircraft, pilots, origin=origin)
+        summary = self._rule_summary(plane, pilot, vals['flares_planned'])
         if failed:
             reasoning = _(
                 "No aircraft and pilot pass every readiness check. This plan has the fewest "
@@ -345,11 +358,7 @@ class SeedingMissionPlanner(models.AbstractModel):
                 count=len(failed), names=', '.join(name for name, _expl in failed), summary=summary,
             )
         else:
-            reasoning = _(
-                "Rule-based plan: the first aircraft and pilot that pass all eleven readiness "
-                "checks, with the fullest flare load the rack and base stock allow: %s",
-                summary,
-            )
+            reasoning = self._rule_reasoning(plane, pilot, vals['flares_planned'])
         vals.pop('alert_id', None)
         vals.update({
             'launch_by': alert.window_end,

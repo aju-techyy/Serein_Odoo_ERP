@@ -1,0 +1,191 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <!-- General analysis views of missions (Missions menu: graph and pivot). -->
+    <record id="seeding_mission_view_graph" model="ir.ui.view">
+        <field name="name">seeding.mission.graph</field>
+        <field name="model">seeding.mission</field>
+        <field name="arch" type="xml">
+            <graph string="Missions" sample="1">
+                <field name="partner_id"/>
+                <field name="flight_hours" type="measure"/>
+            </graph>
+        </field>
+    </record>
+
+    <record id="seeding_mission_view_pivot" model="ir.ui.view">
+        <field name="name">seeding.mission.pivot</field>
+        <field name="model">seeding.mission</field>
+        <field name="arch" type="xml">
+            <pivot string="Missions" sample="1">
+                <field name="partner_id" type="row"/>
+                <field name="state" type="col"/>
+                <field name="flight_hours" type="measure"/>
+            </pivot>
+        </field>
+    </record>
+
+    <!-- Flight hours by client -->
+    <record id="seeding_report_hours_view_graph" model="ir.ui.view">
+        <field name="name">seeding.mission.graph.hours</field>
+        <field name="model">seeding.mission</field>
+        <field name="priority">32</field>
+        <field name="arch" type="xml">
+            <graph string="Flight Hours by Client" type="bar" sample="1">
+                <field name="partner_id"/>
+                <field name="flight_hours" type="measure"/>
+            </graph>
+        </field>
+    </record>
+
+    <record id="seeding_report_hours_view_pivot" model="ir.ui.view">
+        <field name="name">seeding.mission.pivot.hours</field>
+        <field name="model">seeding.mission</field>
+        <field name="priority">32</field>
+        <field name="arch" type="xml">
+            <pivot string="Flight Hours by Client" sample="1">
+                <field name="partner_id" type="row"/>
+                <field name="landing_at" interval="month" type="col"/>
+                <field name="flight_hours" type="measure"/>
+            </pivot>
+        </field>
+    </record>
+
+    <record id="seeding_report_hours_action" model="ir.actions.act_window">
+        <field name="name">Flight Hours by Client</field>
+        <field name="res_model">seeding.mission</field>
+        <field name="view_mode">graph,pivot,list,form</field>
+        <field name="view_ids" eval="[(5, 0, 0),
+            (0, 0, {'view_mode': 'graph', 'view_id': ref('seeding_report_hours_view_graph')}),
+            (0, 0, {'view_mode': 'pivot', 'view_id': ref('seeding_report_hours_view_pivot')})]"/>
+        <field name="domain">[('state', 'in', ('completed', 'billed'))]</field>
+        <field name="context">{'create': False}</field>
+        <field name="help" type="html">
+            <p class="o_view_nocontent_empty_folder">No flight hours yet</p>
+            <p>Flight hours of completed and billed missions, by client.</p>
+        </field>
+    </record>
+
+    <!-- Material released by area -->
+    <record id="seeding_report_material_view_graph" model="ir.ui.view">
+        <field name="name">seeding.mission.graph.material</field>
+        <field name="model">seeding.mission</field>
+        <field name="priority">32</field>
+        <field name="arch" type="xml">
+            <graph string="Material Released by Area" type="bar" sample="1">
+                <field name="area_id"/>
+                <field name="material_released_g" type="measure"/>
+            </graph>
+        </field>
+    </record>
+
+    <record id="seeding_report_material_view_pivot" model="ir.ui.view">
+        <field name="name">seeding.mission.pivot.material</field>
+        <field name="model">seeding.mission</field>
+        <field name="priority">32</field>
+        <field name="arch" type="xml">
+            <pivot string="Material Released by Area" sample="1">
+                <field name="area_id" type="row"/>
+                <field name="landing_at" interval="month" type="col"/>
+                <field name="material_released_g" type="measure"/>
+                <field name="flares_fired" type="measure"/>
+            </pivot>
+        </field>
+    </record>
+
+    <record id="seeding_report_material_action" model="ir.actions.act_window">
+        <field name="name">Material Released by Area</field>
+        <field name="res_model">seeding.mission</field>
+        <field name="view_mode">graph,pivot,list,form</field>
+        <field name="view_ids" eval="[(5, 0, 0),
+            (0, 0, {'view_mode': 'graph', 'view_id': ref('seeding_report_material_view_graph')}),
+            (0, 0, {'view_mode': 'pivot', 'view_id': ref('seeding_report_material_view_pivot')})]"/>
+        <field name="domain">[('state', 'in', ('completed', 'billed'))]</field>
+        <field name="context">{'create': False}</field>
+        <field name="help" type="html">
+            <p class="o_view_nocontent_empty_folder">No material released yet</p>
+            <p>Grams of seeding material released by completed and billed missions, by target area.</p>
+        </field>
+    </record>
+
+    <!-- Cost per mission -->
+    <record id="seeding_report_cost_view_graph" model="ir.ui.view">
+        <field name="name">seeding.mission.graph.cost</field>
+        <field name="model">seeding.mission</field>
+        <field name="priority">32</field>
+        <field name="arch" type="xml">
+            <graph string="Cost per Mission" type="bar" sample="1">
+                <field name="name"/>
+                <field name="mission_cost" type="measure"/>
+            </graph>
+        </field>
+    </record>
+
+    <record id="seeding_report_cost_view_pivot" model="ir.ui.view">
+        <field name="name">seeding.mission.pivot.cost</field>
+        <field name="model">seeding.mission</field>
+        <field name="priority">32</field>
+        <field name="arch" type="xml">
+            <pivot string="Cost per Mission" sample="1">
+                <field name="name" type="row"/>
+                <field name="flare_cost" type="measure"/>
+                <field name="aircraft_cost" type="measure"/>
+                <field name="crew_cost" type="measure"/>
+                <field name="mission_cost" type="measure"/>
+            </pivot>
+        </field>
+    </record>
+
+    <record id="seeding_report_cost_action" model="ir.actions.act_window">
+        <field name="name">Cost per Mission</field>
+        <field name="res_model">seeding.mission</field>
+        <field name="view_mode">graph,pivot,list,form</field>
+        <field name="view_ids" eval="[(5, 0, 0),
+            (0, 0, {'view_mode': 'graph', 'view_id': ref('seeding_report_cost_view_graph')}),
+            (0, 0, {'view_mode': 'pivot', 'view_id': ref('seeding_report_cost_view_pivot')})]"/>
+        <field name="domain">[('state', 'in', ('completed', 'billed'))]</field>
+        <field name="context">{'create': False}</field>
+        <field name="help" type="html">
+            <p class="o_view_nocontent_empty_folder">No mission cost yet</p>
+            <p>Flare, aircraft, and crew cost of each completed and billed mission.</p>
+        </field>
+    </record>
+
+    <!-- AI-planned versus rules-planned missions -->
+    <record id="seeding_report_planning_view_graph" model="ir.ui.view">
+        <field name="name">seeding.mission.graph.planning</field>
+        <field name="model">seeding.mission</field>
+        <field name="priority">32</field>
+        <field name="arch" type="xml">
+            <graph string="Missions by Planner" type="pie" sample="1">
+                <field name="planned_by"/>
+            </graph>
+        </field>
+    </record>
+
+    <record id="seeding_report_planning_view_pivot" model="ir.ui.view">
+        <field name="name">seeding.mission.pivot.planning</field>
+        <field name="model">seeding.mission</field>
+        <field name="priority">32</field>
+        <field name="arch" type="xml">
+            <pivot string="Missions by Planner" sample="1">
+                <field name="planned_by" type="row"/>
+                <field name="state" type="col"/>
+            </pivot>
+        </field>
+    </record>
+
+    <record id="seeding_report_planning_action" model="ir.actions.act_window">
+        <field name="name">Missions by Planner</field>
+        <field name="res_model">seeding.mission</field>
+        <field name="view_mode">graph,pivot,list,form</field>
+        <field name="view_ids" eval="[(5, 0, 0),
+            (0, 0, {'view_mode': 'graph', 'view_id': ref('seeding_report_planning_view_graph')}),
+            (0, 0, {'view_mode': 'pivot', 'view_id': ref('seeding_report_planning_view_pivot')})]"/>
+        <field name="domain">[('state', '!=', 'cancelled')]</field>
+        <field name="context">{'create': False}</field>
+        <field name="help" type="html">
+            <p class="o_view_nocontent_empty_folder">No missions yet</p>
+            <p>Missions planned by the AI planner, by the rule-based planner, and by operators.</p>
+        </field>
+    </record>
+</odoo>

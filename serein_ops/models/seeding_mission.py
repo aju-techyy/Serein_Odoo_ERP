@@ -1,6 +1,14 @@
+import json
+from datetime import timedelta
+
 from odoo import Command, _, api, fields, models
 from odoo.exceptions import UserError
 from odoo.tools import float_compare
+
+from .weather_service import RAINFALL_SOURCE
+
+# Observed rainfall covers the takeoff hour to this many hours after the landing hour.
+RAINFALL_HOURS_AFTER_LANDING = 24
 
 # Checks a different aircraft, pilot, or flare load can fix (5 to 11).
 # Checks 1 to 4 depend on the contract and the alert.
@@ -143,6 +151,20 @@ class SeedingMission(models.Model):
         help="Rainfall observed over the target area after the flight.",
     )
     rainfall_recorded_at = fields.Datetime(string='Rainfall Recorded At', readonly=True, copy=False)
+    rainfall_period_start = fields.Datetime(
+        string='Rainfall From', readonly=True, copy=False,
+        help="Start of the hours the observed rainfall covers: the takeoff hour.",
+    )
+    rainfall_period_end = fields.Datetime(
+        string='Rainfall To', readonly=True, copy=False,
+        help="End of the hours the observed rainfall covers: %s hours after the landing hour."
+             % RAINFALL_HOURS_AFTER_LANDING,
+    )
+    rainfall_source = fields.Char(string='Rainfall Source', readonly=True, copy=False)
+    rainfall_raw_response = fields.Text(
+        string='Rainfall Raw Response', readonly=True, copy=False,
+        help="The archive's full answer the rainfall was summed from.",
+    )
     note = fields.Html()
 
     # Cost and billing -------------------------------------------------------
@@ -609,6 +631,86 @@ class SeedingMission(models.Model):
             message = '%s %s' % (message, _("Batches: %s.", self.flare_batches))
         self.message_post(body=message)
         return picking
+
+    # Observed rainfall ------------------------------------------------------
+
+    def _rainfall_period(self):
+        """(start, end) in naive UTC: the takeoff hour to
+        RAINFALL_HOURS_AFTER_LANDING hours after the end of the landing hour."""
+        self.ensure_one()
+        start = self.takeoff_at.replace(minute=0, second=0, microsecond=0)
+        landing_hour = self.landing_at.replace(minute=0, second=0, microsecond=0)
+        if landing_hour < self.landing_at:
+            landing_hour += timedelta(hours=1)
+        return start, landing_hour + timedelta(hours=RAINFALL_HOURS_AFTER_LANDING)
+
+    def _check_rainfall_fetchable(self):
+        self.ensure_one()
+        if self.state not in ('completed', 'billed'):
+            raise UserError(_("Observed rainfall is fetched for completed missions (%s).", self.name))
+        if not self.takeoff_at or not self.landing_at:
+            raise UserError(_("%s has no takeoff or landing time.", self.name))
+        start, end = self._rainfall_period()
+        if end > fields.Datetime.now():
+            raise UserError(_(
+                "The rainfall period of %(mission)s runs until %(end)s. Fetch the rainfall after "
+                "that: the reanalysis archive is usually about 6 days behind.",
+                mission=self.name, end=self._utc_text(end),
+            ))
+        return start, end
+
+    def _record_rainfall(self, data=None):
+        """Sum the observed rainfall over the area for the rainfall period and
+        store it. `data` is an archive response already covering the period
+        (the demo world loader fetches one per area); without it the archive
+        is called. Raises UserError if the archive does not cover it yet."""
+        self.ensure_one()
+        start, end = self._check_rainfall_fetchable()
+        service = self.env['seeding.weather.service']
+        if data is None:
+            data = service.fetch_archive(self.area_id, start, end)
+        total = service.rainfall_total(data, start, end)
+        self.write({
+            'observed_rainfall_mm': total,
+            'rainfall_recorded_at': fields.Datetime.now(),
+            'rainfall_period_start': start,
+            'rainfall_period_end': end,
+            'rainfall_source': RAINFALL_SOURCE,
+            'rainfall_raw_response': json.dumps(data),
+        })
+        message = _(
+            "Observed rainfall recorded: %(mm)s mm over %(area)s from %(start)s to %(end)s "
+            "(%(source)s). Rainfall data by Open-Meteo.com (CC BY 4.0).",
+            mm='%g' % total, area=self.area_id.name, start=self._utc_text(start),
+            end=self._utc_text(end), source=RAINFALL_SOURCE,
+        )
+        if self.summary_state == 'approved':
+            message += ' ' + _(
+                "The approved client summary does not include it. To add it: Reopen Summary, "
+                "Redraft Summary, then Approve Summary.",
+            )
+        elif self.summary_state == 'to_review':
+            message += ' ' + _("Redraft Summary to include it in the client summary.")
+        self.message_post(body=message)
+        return total
+
+    def action_fetch_rainfall(self):
+        """'Fetch Observed Rainfall' button."""
+        lines = []
+        for mission in self:
+            total = mission._record_rainfall()
+            lines.append(_("%(mission)s: %(mm)s mm.", mission=mission.name, mm='%g' % total))
+        return {
+            'type': 'ir.actions.client',
+            'tag': 'display_notification',
+            'params': {
+                'title': _("Observed rainfall recorded"),
+                'message': ' '.join(lines),
+                'type': 'success',
+                'sticky': False,
+                'next': {'type': 'ir.actions.client', 'tag': 'soft_reload'},
+            },
+        }
 
     def action_cancel(self):
         if any(m.state not in ('proposed', 'ready') for m in self):

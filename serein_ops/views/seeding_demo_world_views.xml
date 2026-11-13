@@ -1,0 +1,42 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <record id="seeding_demo_world_view_form" model="ir.ui.view">
+        <field name="name">seeding.demo.world.form</field>
+        <field name="model">seeding.demo.world</field>
+        <field name="arch" type="xml">
+            <form string="Load Demo World">
+                <div class="alert alert-warning" role="alert" invisible="not blocking_reason">
+                    <field name="blocking_reason" nolabel="1" class="d-inline"/>
+                </div>
+                <p>Fills this database with a complete cloud seeding operator:</p>
+                <ul>
+                    <li>three clients in the United Arab Emirates, Malaysia, and Norway, with six
+                        target areas and an active contract each;</li>
+                    <li>two bases, three crewed aircraft and one drone (the King Air 350 is close
+                        to its service interval), and five pilots and operators (one with an
+                        expired medical);</li>
+                    <li>HF-1000 flares in five batches, a vendor, and a reorder rule per base;</li>
+                    <li>25 past missions, flown through the readiness checks, with their flare
+                        releases, client summaries to review, and the invoices of past months;</li>
+                    <li>six weather snapshots recorded from Open-Meteo, and observed rainfall for
+                        missions flown more than two weeks ago (fetched from the reanalysis
+                        archive while loading, if it can be reached).</li>
+                </ul>
+                <p class="text-muted">The company is renamed Stratus Ridge Weather Services.
+                    Dates are set relative to today.</p>
+                <footer>
+                    <button name="action_load" type="object" string="Load" class="btn-primary"
+                            invisible="blocking_reason"/>
+                    <button string="Cancel" class="btn-secondary" special="cancel"/>
+                </footer>
+            </form>
+        </field>
+    </record>
+
+    <record id="action_seeding_demo_world_load" model="ir.actions.act_window">
+        <field name="name">Load Demo World</field>
+        <field name="res_model">seeding.demo.world</field>
+        <field name="view_mode">form</field>
+        <field name="target">new</field>
+    </record>
+</odoo>

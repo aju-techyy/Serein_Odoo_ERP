@@ -2,6 +2,7 @@ import re
 
 from odoo import _, api, fields, models
 
+from .seeding_mission import RAINFALL_HOURS_AFTER_LANDING
 from .seeding_readiness_check import READINESS_CHECKS
 from .seeding_weather_snapshot import WIND_CALM, WIND_LIMIT
 
@@ -99,6 +100,8 @@ Rules:
   results: the number of flares fired, the seeding material released, and rainfall.
   You may name the flare batches (flares.batches) the flares came from.
 - If observed_rainfall_mm is null, say that observed rainfall has not been recorded yet.
+  Otherwise give it with its period (observed_rainfall_period: from the takeoff hour to
+  hours_after_landing hours after landing) and its source.
   Never claim or imply that the seeding caused or increased rainfall.
 - Do not mention internal ids, costs, prices or how the text was written.
 - Plain text only: no headings, no markdown, no bullet points.
@@ -310,6 +313,12 @@ class SeedingMissionWriter(models.AbstractModel):
             'observed_rainfall_mm': (
                 mission.observed_rainfall_mm if mission.rainfall_recorded_at else None
             ),
+            'observed_rainfall_period': {
+                'from_utc': _utc(mission.rainfall_period_start),
+                'to_utc': _utc(mission.rainfall_period_end),
+                'hours_after_landing': RAINFALL_HOURS_AFTER_LANDING,
+                'source': mission.rainfall_source,
+            } if mission.rainfall_recorded_at else None,
         }
 
     # Validation -----------------------------------------------------------
@@ -512,7 +521,10 @@ class SeedingMissionWriter(models.AbstractModel):
             closing = _("Before launch, all %s readiness checks passed.", readiness['checks_passed'])
         if mission.rainfall_recorded_at:
             closing += ' ' + _(
-                "Observed rainfall over the area: %s mm.", _num(mission.observed_rainfall_mm),
+                "Observed rainfall over the area from the takeoff hour to %(hours)s hours after "
+                "landing was %(mm)s mm (%(source)s).",
+                hours=RAINFALL_HOURS_AFTER_LANDING, mm=_num(mission.observed_rainfall_mm),
+                source=mission.rainfall_source or _("weather archive"),
             )
         else:
             closing += ' ' + _("Observed rainfall over the area has not been recorded yet.")
@@ -565,6 +577,27 @@ class SeedingMissionWriter(models.AbstractModel):
             body = _("Crew briefing written from the mission record. %s", mission.briefing_fallback_reason)
         mission.message_post(body=body)
         return text is not None
+
+    @api.model
+    def write_summary_from_record(self, mission):
+        """Write the client summary from the mission record only, with no AI
+        call (used for missions recorded in bulk). It awaits review like any
+        other summary."""
+        mission.ensure_one()
+        mission.write({
+            'client_summary': self._summary_template(mission),
+            'summary_source': 'template',
+            'summary_model': False,
+            'summary_fallback_reason': False,
+            'summary_drafted_at': fields.Datetime.now(),
+            'summary_reviewed_by': False,
+            'summary_reviewed_at': False,
+        })
+        mission.message_post(body=_(
+            "Client summary written from the mission record. It appears on the mission report "
+            "once approved.",
+        ))
+        return True
 
     @api.model
     def write_summary(self, mission):
